@@ -128,7 +128,6 @@ breast--cancer-prediction/
 ├── .gitignore
 ├── requirements.txt                          # Pinned dependencies
 ├── LICENSE                                   # MIT License
-├── INTERVIEW_PREP.md                         # Detailed technical interview Q&A guide
 └── README.md                                 # Project documentation
 ```
 
@@ -188,8 +187,8 @@ pytest -v tests/test_pipeline.py
 2. **Distance-Weighted Neighborhoods:**
    Standard KNN gives every neighbor 1 uniform vote. In this project, neighbors are weighted by inverse Euclidean distance ($w_i = 1 / d(x, x_i)$), ensuring that samples with near-identical morphological dimensions exert greater diagnostic influence.
 
-3. **Interview Ready:**
-   For a comprehensive guide covering technical interview questions on the curse of dimensionality, $K$ selection trade-offs, and clinical decision support, see [**INTERVIEW_PREP.md**](INTERVIEW_PREP.md).
+3. **Rigorous Clinical Evaluation:**
+   Prioritizes high sensitivity and recall to minimize life-threatening False Negatives while maintaining an outstanding 96.55% F1-score and 0.99 ROC-AUC.
 
 ---
 
