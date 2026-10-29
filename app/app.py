@@ -1,9 +1,10 @@
 """
 app.py
 ======
-Interactive Streamlit Web Application for Breast Cancer Biopsy Prediction.
+Interactive Streamlit Web Application for Breast Cancer Biopsy Prediction & Explainable AI.
 Allows clinicians, researchers, and interviewers to compare multiple trained ML models
-(KNN, Logistic Regression, SVM, Random Forest) and test real-time inference.
+(KNN, Logistic Regression, SVM, Random Forest), test real-time inference, and inspect
+global and local explanations using SHAP (SHapley Additive exPlanations).
 """
 
 import os
@@ -11,15 +12,19 @@ import sys
 import numpy as np
 import pandas as pd
 import streamlit as st
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 # Add repo root to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.predict import load_trained_pipeline, predict
 from src.data_loader import load_raw_dataset
+from src.explain import explain_instance, plot_local_waterfall
 
 st.set_page_config(
-    page_title="Breast Cancer Detection | Multi-Model Diagnostic Platform",
+    page_title="Breast Cancer Detection & Explainable AI Platform",
     page_icon="🎗️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -66,12 +71,28 @@ st.markdown("""
         display: inline-block;
         border: 2px solid #EF9A9A;
     }
+    .shap-positive {
+        background-color: #FFF3E0;
+        border-left: 4px solid #E65100;
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+    .shap-negative {
+        background-color: #E1F5FE;
+        border-left: 4px solid #0288D1;
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Header
-st.markdown('<div class="main-title">🎗️ Breast Cancer Detection — Multi-Model Diagnostic Platform</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Clinical Diagnostic Platform powered by an End-to-End Scikit-Learn Pipeline comparing <b>KNN, Logistic Regression, SVM, and Random Forest</b> on the Wisconsin Diagnostic Dataset.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🎗️ Breast Cancer Detection & Explainable AI (XAI)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Clinical Diagnostic & Transparent Machine Learning Platform comparing <b>KNN, Logistic Regression, SVM, and Random Forest</b> with <b>SHAP Interpretability</b> on the Wisconsin Diagnostic Dataset.</div>', unsafe_allow_html=True)
 
 # Sidebar - Model Selection
 st.sidebar.header("🤖 Model Selection")
@@ -85,11 +106,11 @@ MODEL_NAME_TO_KEY = {
 selected_model_name = st.sidebar.selectbox(
     "Choose Active Classifier:",
     options=list(MODEL_NAME_TO_KEY.keys()),
-    index=0
+    index=2  # Default to Random Forest for instant TreeSHAP
 )
 selected_model_key = MODEL_NAME_TO_KEY[selected_model_name]
 
-# Load Model
+# Load Model with caching
 @st.cache_resource
 def get_model(model_key: str):
     return load_trained_pipeline(model_key)
@@ -180,9 +201,9 @@ with col_pred:
     st.progress(prob_b, text=f"Benign Probability: {prob_b * 100:.1f}%")
 
     st.info("""
-    **Clinical Screening Note:**
-    In oncological screening, **Recall** is critical to prevent False Negatives (FN). 
-    A Malignant classification indicates elevated risk requiring targeted diagnostic imaging and histopathological review.
+    **Clinical Guidance:**
+    In oncological screening, **Recall** is prioritized to ensure near-zero False Negatives (FN). 
+    A Malignant classification triggers immediate histopathology confirmation and targeted imaging.
     """)
 
 with col_metrics:
@@ -215,10 +236,11 @@ with col_metrics:
     </div>
     """, unsafe_allow_html=True)
 
-# Tabs for Diagnostic Visualizations
+# Tabs for Diagnostic Visualizations & Explainable AI
 st.write("---")
-st.subheader("📈 Diagnostic Analytics & Multi-Model Evaluation")
-tab_comp, tab1, tab2, tab3 = st.tabs([
+st.subheader("📈 Diagnostic Analytics & Explainable AI")
+tab_xai, tab_comp, tab1, tab2, tab3 = st.tabs([
+    "🧠 Explainable AI (SHAP)",
     "🏆 4-Model Comparison",
     "📉 Confusion Matrix",
     "⚡ Error Rate vs. K (Elbow Plot)",
@@ -228,6 +250,87 @@ tab_comp, tab1, tab2, tab3 = st.tabs([
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 assets_dir = os.path.join(base_dir, "assets")
 reports_dir = os.path.join(base_dir, "reports")
+
+with tab_xai:
+    st.write(f"### 🔍 Model Transparency: SHAP Interpretability for {selected_model_name}")
+    st.caption("SHAP (SHapley Additive exPlanations) attributes predictive credit to each nuclear morphology feature based on cooperative game theory.")
+
+    # 1. Local Explanation Section
+    st.write("#### 1. Local Patient Biopsy Feature Attribution")
+    
+    with st.spinner(f"Computing local SHAP explanations using {selected_model_name}..."):
+        try:
+            explanation = explain_instance(input_data, model_name=selected_model_key, pipeline=pipeline)
+            
+            col_xai1, col_xai2 = st.columns([1.1, 0.9])
+            
+            with col_xai1:
+                st.write(f"**Explainer Architecture:** `{explanation['explainer_type']}`")
+                st.write(f"**Predicted Target:** `{explanation['diagnosis']}` | **{explanation['score_name']}:** `{explanation['model_score']:.4f}`")
+                st.write(f"**Baseline Rate (Expected Value):** `{explanation['base_value']:.4f}`")
+
+                # Direction of contribution cards
+                st.write("**Top Factors Elevating Risk (Pushing toward Malignant):**")
+                if explanation["top_positive_features"]:
+                    for item in explanation["top_positive_features"]:
+                        st.markdown(
+                            f'<div class="shap-positive"><b>{item["feature"].replace("_", " ").title()}:</b> '
+                            f'Value = {item["feature_value"]:.4f} &nbsp;|&nbsp; '
+                            f'<b>+{item["shap_value"]:.4f}</b> contribution</div>',
+                            unsafe_allow_html=True
+                        )
+                else:
+                    st.write("None: No features strongly pushed toward malignancy.")
+
+                st.write("**Top Factors Lowering Risk (Pushing toward Benign):**")
+                if explanation["top_negative_features"]:
+                    for item in explanation["top_negative_features"]:
+                        st.markdown(
+                            f'<div class="shap-negative"><b>{item["feature"].replace("_", " ").title()}:</b> '
+                            f'Value = {item["feature_value"]:.4f} &nbsp;|&nbsp; '
+                            f'<b>{item["shap_value"]:.4f}</b> contribution</div>',
+                            unsafe_allow_html=True
+                        )
+                else:
+                    st.write("None: No features strongly pushed toward benign.")
+
+            with col_xai2:
+                # Render Waterfall plot
+                fig_waterfall = plot_local_waterfall(explanation["shap_explanation"], max_display=9)
+                st.pyplot(fig_waterfall)
+                plt.close(fig_waterfall)
+
+        except Exception as err:
+            st.warning(f"Could not compute local SHAP explanation: {err}")
+
+    st.write("---")
+    # 2. Global Explanations Section
+    st.write("#### 2. Global Clinical Biomarker Reliance")
+    st.write("Global feature attribution computed across the training cohort, highlighting which cell nucleus properties dominate classification decisions:")
+
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        biomarker_img = os.path.join(assets_dir, "shap_feature_importance.png")
+        if os.path.exists(biomarker_img):
+            st.image(biomarker_img, caption="Comparative Clinical Biomarker Importance Across 4 Classifiers", use_container_width=True)
+    with col_g2:
+        rf_summary_img = os.path.join(assets_dir, "shap_summary_random_forest.png")
+        if os.path.exists(rf_summary_img):
+            st.image(rf_summary_img, caption="TreeSHAP Beeswarm Plot (Random Forest Malignant Attribution)", use_container_width=True)
+
+    # Global importance table for active model
+    shap_csv = os.path.join(reports_dir, "shap_feature_importance.csv")
+    if os.path.exists(shap_csv):
+        df_all_shap = pd.read_csv(shap_csv)
+        df_model_shap = df_all_shap[df_all_shap["model"] == selected_model_key].head(10)
+        st.write(f"**Top 10 Biomarkers for `{selected_model_name}` (Ranked by Mean Absolute SHAP):**")
+        st.dataframe(df_model_shap[["importance_rank", "feature", "mean_abs_shap"]], use_container_width=True)
+
+    st.warning("""
+    **Educational & Clinical Decision Support Notice:**
+    SHAP values quantify statistical feature attribution and predictive reliance within this machine learning system.
+    They do **not** represent biological causality or clinical pathology findings. All diagnostic determinations must be corroborated by licensed pathologists via histologic biopsy review.
+    """)
 
 with tab_comp:
     st.write("### Benchmark Comparison across 4 Classification Algorithms")

@@ -44,6 +44,42 @@ All 4 classification models were trained and benchmarked under identical stratif
 
 ---
 
+## 🧠 Explainable AI (XAI) with SHAP
+
+### 1. What is SHAP?
+**SHAP (SHapley Additive exPlanations)** is an axiomatic game-theoretic approach to explain the output of any machine learning model. It connects optimal credit allocation from cooperative game theory to local feature attribution:
+$$\sum_{i=1}^{M} \phi_i(x) = f(x) - \mathbb{E}[f(X)]$$
+Where:
+- $\phi_i(x)$ is the marginal attribution (Shapley value) of feature $i$.
+- $f(x)$ is the model prediction score for the individual biopsy sample.
+- $\mathbb{E}[f(X)]$ is the expected baseline prediction across the patient population.
+
+### 2. Model-Specific Explainer Architecture
+To guarantee computational efficiency and mathematical fidelity across all 4 architectures, specialized explainers are deployed:
+
+| Model Architecture | SHAP Explainer | Mathematical Formulation & Rationale |
+| :--- | :--- | :--- |
+| **Random Forest** | `shap.TreeExplainer` | Evaluates tree path conditional expectations in exact polynomial time ($O(TLD^2)$), eliminating sampling variance. Explains $P(\text{Malignant})$. |
+| **Logistic Regression** | `shap.LinearExplainer` | Computes exact closed-form Shapley values for linear decision margins using an independent training background feature masker (`shap.maskers.Independent`). |
+| **Support Vector Machine (SVM)** | `shap.KernelExplainer` | Non-linear RBF kernel cannot use tree/linear methods; KernelExplainer solves weighted linear regression on calibrated predict probabilities with a representative background sample. |
+| **K-Nearest Neighbors (KNN)** | `shap.KernelExplainer` | Non-parametric, distance-based neighborhood algorithm evaluated via KernelExplainer with a representative training background sample. |
+
+### 3. Global & Local Interpretability
+- **Local Explanations (Individual Biopsy):** Interactive waterfall plots illustrate how each nuclear morphology measurement pushes the patient's diagnostic score away from the population baseline toward either **Malignant** (positive $\phi_i$, elevating risk) or **Benign** (negative $\phi_i$, lowering risk).
+- **Global Explanations (Population Cohort):** Aggregates mean absolute SHAP values across the cohort to reveal which morphological features the models rely on most heavily.
+
+| Global Biomarker Reliance Across Models | Random Forest TreeSHAP Beeswarm Plot |
+| :---: | :---: |
+| ![Biomarker Comparison](assets/shap_feature_importance.png) | ![TreeSHAP Summary](assets/shap_summary_random_forest.png) |
+
+### 4. Key Biomarkers Identified
+Across all 4 models, the most dominant predictors of malignancy are:
+1. **Worst Cell Area (`area_worst`)** & **Worst Radius (`radius_worst`)**: Severe nuclear enlargement is the strongest indicator of malignant cell growth.
+2. **Worst Concave Points (`concave points_worst`)**: Severe indentation of cell nuclear membranes distinguishes invasive carcinoma from smooth benign fibroadenomas.
+3. **Mean Concavity (`concavity_mean`)**: Degree and depth of membrane indentations.
+
+---
+
 ## 🏗️ System Architecture
 
 ```
@@ -132,11 +168,12 @@ breast--cancer-prediction/
 │   └── breast_cancer_detection.ipynb         # Interactive Jupyter Notebook with complete EDA
 ├── src/
 │   ├── __init__.py
-│   ├── data_loader.py                        # Dataset loading & zero-leakage splitting
-│   ├── pipeline.py                           # Scikit-learn Pipeline (Scaler + KNN)
-│   ├── train.py                              # Model training, CV, and hyperparameter tuning
-│   ├── evaluate.py                           # Clinical evaluation metrics & reporting
-│   └── predict.py                            # CLI & programmatic inference API
+│   ├── data_loader.py                        # Dataset loading, canonical features & zero-leakage split
+│   ├── pipeline.py                           # Scikit-learn Pipelines (KNN, LR, SVM, Random Forest)
+│   ├── train.py                              # Model training, Stratified CV, serialization
+│   ├── evaluate.py                           # Clinical evaluation metrics & comparison reporting
+│   ├── predict.py                            # Multi-model inference API with shape validation
+│   └── explain.py                            # SHAP Explainable AI (Tree, Linear, Kernel explainers)
 ├── models/
 │   ├── knn_pipeline.joblib                   # Serialized KNN pipeline (Scaler + Distance KNN)
 │   ├── logistic_regression_pipeline.joblib   # Serialized Logistic Regression pipeline
@@ -145,15 +182,18 @@ breast--cancer-prediction/
 │   └── models_summary.json                   # Metadata and evaluation summary for all models
 ├── reports/
 │   ├── model_comparison.csv                  # Machine-readable comparison metrics table
-│   └── model_comparison.json                 # Complete structured metrics & confusion matrices
+│   ├── model_comparison.json                 # Complete structured metrics & confusion matrices
+│   ├── shap_feature_importance.csv           # Global SHAP feature importance rankings table
+│   └── shap_feature_importance.json          # Mean absolute SHAP values per feature across models
 ├── app/
 │   └── app.py                                # Streamlit multi-model interactive diagnostic web app
 ├── tests/
 │   ├── __init__.py
-│   └── test_pipeline.py                      # Pytest unit tests (verifies 97.3% accuracy)
-├── assets/                                   # Evaluation plots and diagnostic charts
+│   ├── test_pipeline.py                      # Phase 1 unit tests (models, splits, leakage, accuracy)
+│   └── test_explain.py                       # Phase 2 unit tests (SHAP explainers, waterfall, invariance)
+├── assets/                                   # Evaluation plots, ROC curves, and SHAP diagrams
 ├── .gitignore
-├── requirements.txt                          # Pinned dependencies
+├── requirements.txt                          # Pinned dependencies (including shap)
 ├── LICENSE                                   # MIT License
 └── README.md                                 # Project documentation
 ```
@@ -184,38 +224,42 @@ pip install -r requirements.txt
 python -m src.train
 ```
 
-To run full hyperparameter grid search:
+### 4. Generate Global Explainable AI (SHAP) Visualizations
 ```bash
-python -m src.train --tune
+python -m src.explain
 ```
 
-### 4. Run Demonstration CLI Prediction
+### 5. Run Demonstration CLI Prediction
 ```bash
 python -m src.predict --demo
 ```
 
-### 5. Launch Interactive Streamlit Web App
+### 6. Launch Interactive Streamlit Web App
 ```bash
 streamlit run app/app.py
 ```
 
-### 6. Run Automated Unit Tests
+### 7. Run Automated Unit Tests (19 Tests)
 ```bash
-pytest -v tests/test_pipeline.py
+pytest -v
 ```
 
 ---
 
-## 🔬 Key Engineering Highlights
+## ⚠️ Known Limitations & Methodological Constraints
 
-1. **Zero Data Leakage:**
-   Novice machine learning workflows frequently call `scaler.fit_transform(X_test)` or normalize data prior to splitting. This pipeline strictly fits the scaler solely on the training partition ($X_{train}$), keeping $X_{test}$ completely out-of-sample.
+1. **KernelSHAP Computational Cost on Non-Linear Kernel Models:**
+   - KernelSHAP on SVM and KNN scales combinatorially with feature count. To ensure real-time responsiveness in the interactive Streamlit app (<0.1s per patient), a deterministic representative background sample ($N=30$) drawn strictly from the training cohort is utilized.
+2. **Correlation & Multicollinearity:**
+   - Morphological dimensions of cell nuclei (e.g., radius, perimeter, area) exhibit natural geometric collinearity ($r > 0.9$). SHAP shares attribution across correlated predictors; changes in one feature may distribute across allied variables.
+3. **Observational Attribution vs. Causality:**
+   - SHAP values measure statistical feature attribution and predictive reliance within this machine learning system. They do **not** represent biological or physical causality.
 
-2. **Distance-Weighted Neighborhoods:**
-   Standard KNN gives every neighbor 1 uniform vote. In this project, neighbors are weighted by inverse Euclidean distance ($w_i = 1 / d(x, x_i)$), ensuring that samples with near-identical morphological dimensions exert greater diagnostic influence.
+---
 
-3. **Rigorous Clinical Evaluation:**
-   Prioritizes high sensitivity and recall to minimize life-threatening False Negatives while maintaining an outstanding 96.55% F1-score and 0.99 ROC-AUC.
+## ⚕️ Educational Use Only Disclaimer
+
+> **IMPORTANT NOTICE:** This repository and associated software are strictly developed for academic evaluation, machine learning algorithm benchmarking, and explainable AI research. They are **not** certified, validated, or approved medical devices (under FDA, CE, or CDSCO regulations) and must **not** be used as a standalone diagnostic tool or to guide patient treatment plans. Final clinical diagnoses must always be established by certified medical pathologists through comprehensive tissue histopathology.
 
 ---
 
