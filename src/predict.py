@@ -1,7 +1,8 @@
 """
 predict.py
 ==========
-Inference module for serving predictions from the trained KNN pipeline.
+Inference module for serving predictions from trained breast cancer pipelines
+(KNN, Logistic Regression, SVM, and Random Forest).
 Provides both programmatic API and Command Line Interface (CLI).
 """
 
@@ -13,16 +14,66 @@ import numpy as np
 import pandas as pd
 
 
-def load_trained_pipeline(model_path: str = None) -> Dict[str, Any]:
-    """Loads the serialized model payload from disk."""
-    if model_path is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        model_path = os.path.join(base_dir, "models", "knn_pipeline.joblib")
+MODEL_FILE_MAP = {
+    "knn": "knn_pipeline.joblib",
+    "k-nearest neighbors": "knn_pipeline.joblib",
+    "logistic_regression": "logistic_regression_pipeline.joblib",
+    "logistic regression": "logistic_regression_pipeline.joblib",
+    "lr": "logistic_regression_pipeline.joblib",
+    "svm": "svm_pipeline.joblib",
+    "support vector machine": "svm_pipeline.joblib",
+    "random_forest": "random_forest_pipeline.joblib",
+    "random forest": "random_forest_pipeline.joblib",
+    "rf": "random_forest_pipeline.joblib",
+}
+
+
+def get_models_dir() -> str:
+    """Returns the absolute path to the models directory."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, "models")
+
+
+def load_trained_pipeline(model_name_or_path: str = "knn") -> Dict[str, Any]:
+    """
+    Loads a serialized model payload from disk by model identifier or file path.
+
+    Parameters
+    ----------
+    model_name_or_path : str, default="knn"
+        Key identifier ('knn', 'logistic_regression', 'svm', 'random_forest')
+        or absolute/relative filesystem path to a .joblib artifact.
+
+    Returns
+    -------
+    dict
+        Deserialized artifact dictionary containing 'pipeline', 'model_name',
+        'feature_names', 'metrics', etc.
+    """
+    if model_name_or_path is None:
+        model_name_or_path = "knn"
+
+    models_dir = get_models_dir()
+    lookup_key = str(model_name_or_path).strip().lower()
+
+    if lookup_key in MODEL_FILE_MAP:
+        model_path = os.path.join(models_dir, MODEL_FILE_MAP[lookup_key])
+    elif os.path.isabs(model_name_or_path) or os.path.exists(model_name_or_path):
+        model_path = model_name_or_path
+    else:
+        # Check if it was provided as a bare filename in models/
+        candidate = os.path.join(models_dir, model_name_or_path)
+        if os.path.exists(candidate):
+            model_path = candidate
+        else:
+            model_path = os.path.join(models_dir, f"{lookup_key}_pipeline.joblib")
 
     if not os.path.exists(model_path):
+        available = [f for f in os.listdir(models_dir) if f.endswith(".joblib")] if os.path.exists(models_dir) else []
         raise FileNotFoundError(
             f"Trained model not found at '{model_path}'. "
-            "Please run 'python -m src.train' first to generate the artifact."
+            f"Available models in models/: {available}. "
+            "Please run 'python -m src.train' to train and serialize pipelines."
         )
 
     return joblib.load(model_path)
@@ -30,7 +81,7 @@ def load_trained_pipeline(model_path: str = None) -> Dict[str, Any]:
 
 def predict(
     sample: Union[pd.DataFrame, Dict[str, float], List[float]],
-    model_path: str = None
+    model_name_or_path: str = "knn"
 ) -> Dict[str, Any]:
     """
     Perform breast cancer classification inference on an input sample.
@@ -39,17 +90,18 @@ def predict(
     ----------
     sample : pd.DataFrame, dict, or list of float
         Cell nucleus measurement values for the 30 FNA features.
-    model_path : str, optional
-        Custom path to serialized joblib artifact.
+    model_name_or_path : str, default="knn"
+        Identifier or path of the trained model to use for prediction.
 
     Returns
     -------
     dict
-        Contains predicted class label, diagnosis name, probabilities, and risk score.
+        Contains predicted class label, diagnosis name, probabilities, and clinical risk.
     """
-    artifact = load_trained_pipeline(model_path)
+    artifact = load_trained_pipeline(model_name_or_path)
     pipeline = artifact["pipeline"]
     feature_names = artifact["feature_names"]
+    model_name = artifact.get("model_name", str(model_name_or_path))
 
     # Convert dictionary or list to DataFrame
     if isinstance(sample, dict):
@@ -57,21 +109,34 @@ def predict(
     elif isinstance(sample, list):
         if len(sample) != len(feature_names):
             raise ValueError(
-                f"Expected {len(feature_names)} features, got {len(sample)}."
+                f"Feature count mismatch: Expected {len(feature_names)} features, got {len(sample)}."
             )
         df_input = pd.DataFrame([sample], columns=feature_names)
     elif isinstance(sample, pd.DataFrame):
         df_input = sample.copy()
     else:
-        raise TypeError("sample must be a DataFrame, dict, or list of numbers.")
+        raise TypeError("sample must be a pandas DataFrame, dictionary, or list of numbers.")
 
-    # Reorder columns to match pipeline training signature
-    df_input = df_input[feature_names]
+    # Validate presence of all required feature columns
+    missing_cols = [col for col in feature_names if col not in df_input.columns]
+    if missing_cols:
+        raise ValueError(
+            f"Input sample is missing {len(missing_cols)} required features: {missing_cols[:5]}"
+            + ("..." if len(missing_cols) > 5 else "")
+        )
 
-    pred_class = int(pipeline.predict(df_input)[0])
+    # Reorder columns to match canonical pipeline training signature
+    df_aligned = df_input[feature_names].copy()
+
+    # Validate no missing/NaN values
+    if df_aligned.isnull().any().any():
+        nan_cols = df_aligned.columns[df_aligned.isnull().any()].tolist()
+        raise ValueError(f"Input sample contains NaN/null values in columns: {nan_cols}")
+
+    pred_class = int(pipeline.predict(df_aligned)[0])
     pred_label = "Malignant" if pred_class == 1 else "Benign"
 
-    probabilities = pipeline.predict_proba(df_input)[0]
+    probabilities = pipeline.predict_proba(df_aligned)[0]
     prob_malignant = float(probabilities[1])
     prob_benign = float(probabilities[0])
 
@@ -84,20 +149,22 @@ def predict(
         risk_level = "High Risk (Strong Indication of Malignancy)"
 
     return {
+        "model_name": model_name,
         "prediction_code": pred_class,
         "diagnosis": pred_label,
         "probability_malignant": prob_malignant,
         "probability_benign": prob_benign,
         "confidence": max(prob_malignant, prob_benign),
-        "clinical_risk_assessment": risk_level
+        "clinical_risk_assessment": risk_level,
+        "features_evaluated": len(feature_names)
     }
 
 
 def demo_sample_inference():
-    """Demonstrates inference using typical benign and malignant test samples."""
-    print("=" * 60)
-    print("          BREAST CANCER KNN INFERENCE DEMOSTRATION           ")
-    print("=" * 60)
+    """Demonstrates inference using typical benign and malignant test samples across all 4 models."""
+    print("=" * 70)
+    print("      BREAST CANCER MULTI-MODEL INFERENCE DEMONSTRATION           ")
+    print("=" * 70)
 
     # Example 1: Known Malignant biopsy sample
     malignant_sample = {
@@ -125,21 +192,35 @@ def demo_sample_inference():
         'concave points_worst': 0.1288, 'symmetry_worst': 0.2977, 'fractal_dimension_worst': 0.07259
     }
 
-    print("\n[Sample 1 - Expected: Malignant]")
-    res1 = predict(malignant_sample)
-    print(f"  Diagnosis: {res1['diagnosis']} (Confidence: {res1['confidence'] * 100:.1f}%)")
-    print(f"  P(Malignant): {res1['probability_malignant']:.4f} | Assessment: {res1['clinical_risk_assessment']}")
+    models_to_test = ["knn", "logistic_regression", "svm", "random_forest"]
 
-    print("\n[Sample 2 - Expected: Benign]")
-    res2 = predict(benign_sample)
-    print(f"  Diagnosis: {res2['diagnosis']} (Confidence: {res2['confidence'] * 100:.1f}%)")
-    print(f"  P(Benign): {res2['probability_benign']:.4f} | Assessment: {res2['clinical_risk_assessment']}")
-    print("=" * 60)
+    print("\n--- SAMPLE 1: KNOWN MALIGNANT BIOPSY ---")
+    for m in models_to_test:
+        try:
+            res = predict(malignant_sample, model_name_or_path=m)
+            print(f"[{res['model_name']:<24}] -> Diagnosis: {res['diagnosis']:<9} "
+                  f"| P(Malignant): {res['probability_malignant']:.4f} "
+                  f"| Confidence: {res['confidence']*100:.1f}%")
+        except Exception as e:
+            print(f"[{m:<24}] -> Error: {e}")
+
+    print("\n--- SAMPLE 2: KNOWN BENIGN BIOPSY ---")
+    for m in models_to_test:
+        try:
+            res = predict(benign_sample, model_name_or_path=m)
+            print(f"[{res['model_name']:<24}] -> Diagnosis: {res['diagnosis']:<9} "
+                  f"| P(Benign): {res['probability_benign']:.4f} "
+                  f"| Confidence: {res['confidence']*100:.1f}%")
+        except Exception as e:
+            print(f"[{m:<24}] -> Error: {e}")
+
+    print("=" * 70)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Predict Breast Cancer Malignancy with KNN")
+    parser = argparse.ArgumentParser(description="Predict Breast Cancer Malignancy")
     parser.add_argument("--demo", action="store_true", help="Run demonstration inference samples")
+    parser.add_argument("--model", type=str, default="knn", help="Model name (knn, logistic_regression, svm, random_forest)")
     args = parser.parse_args()
 
     demo_sample_inference()

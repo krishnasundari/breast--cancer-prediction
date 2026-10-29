@@ -1,15 +1,30 @@
 """
 data_loader.py
 ==============
-Data ingestion and preprocessing module for the Breast Cancer Wisconsin
-Diagnostic Dataset.
+Data ingestion, validation, and preprocessing module for the Breast Cancer Wisconsin
+(Diagnostic) Dataset.
 """
 
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any, List
 import os
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.datasets import load_breast_cancer
+
+
+# Canonical 30 feature names matching the Wisconsin Diagnostic Dataset
+FEATURE_NAMES: List[str] = [
+    'radius_mean', 'texture_mean', 'perimeter_mean', 'area_mean',
+    'smoothness_mean', 'compactness_mean', 'concavity_mean',
+    'concave points_mean', 'symmetry_mean', 'fractal_dimension_mean',
+    'radius_se', 'texture_se', 'perimeter_se', 'area_se',
+    'smoothness_se', 'compactness_se', 'concavity_se',
+    'concave points_se', 'symmetry_se', 'fractal_dimension_se',
+    'radius_worst', 'texture_worst', 'perimeter_worst', 'area_worst',
+    'smoothness_worst', 'compactness_worst', 'concavity_worst',
+    'concave points_worst', 'symmetry_worst', 'fractal_dimension_worst'
+]
 
 
 def get_default_data_path() -> str:
@@ -44,11 +59,20 @@ def load_raw_dataset(csv_path: Optional[str] = None) -> pd.DataFrame:
         cols = []
         for c in sklearn_data.feature_names:
             if c.startswith("mean "):
-                cols.append(c.replace("mean ", "") + "_mean")
+                base = c.replace("mean ", "")
+                if base == "fractal dimension":
+                    base = "fractal_dimension"
+                cols.append(base + "_mean")
             elif c.endswith(" error"):
-                cols.append(c.replace(" error", "") + "_se")
+                base = c.replace(" error", "")
+                if base == "fractal dimension":
+                    base = "fractal_dimension"
+                cols.append(base + "_se")
             elif c.startswith("worst "):
-                cols.append(c.replace("worst ", "") + "_worst")
+                base = c.replace("worst ", "")
+                if base == "fractal dimension":
+                    base = "fractal_dimension"
+                cols.append(base + "_worst")
             else:
                 cols.append(c.replace(" ", "_"))
         df = raw_df.drop(columns=["target"])
@@ -61,7 +85,56 @@ def load_raw_dataset(csv_path: Optional[str] = None) -> pd.DataFrame:
     if drop_cols:
         df = df.drop(columns=drop_cols)
 
+    # Check and remove duplicates if any
+    duplicates = df.duplicated().sum()
+    if duplicates > 0:
+        df = df.drop_duplicates()
+
+    # Handle missing values if any exist
+    if df.isnull().sum().sum() > 0:
+        # Fill numeric missing values with median
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+
     return df
+
+
+def validate_dataset(df: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
+    """
+    Verifies dataset integrity, shapes, nulls, duplicates, and class distributions.
+
+    Parameters
+    ----------
+    df : pd.DataFrame, optional
+        Dataset to validate. If None, loads the raw dataset automatically.
+
+    Returns
+    -------
+    dict
+        Verification summary including sample count, feature count, class counts.
+    """
+    if df is None:
+        df = load_raw_dataset()
+
+    feature_cols = [c for c in df.columns if c != "diagnosis"]
+    class_counts = df["diagnosis"].value_counts().to_dict() if "diagnosis" in df.columns else {}
+
+    return {
+        "sample_count": int(df.shape[0]),
+        "num_samples": int(df.shape[0]),
+        "feature_count": int(len(feature_cols)),
+        "num_features": int(len(feature_cols)),
+        "feature_names": feature_cols,
+        "target_column": "diagnosis" if "diagnosis" in df.columns else None,
+        "class_counts": class_counts,
+        "class_distribution": {
+            "Benign (0)": int(class_counts.get("B", 0)),
+            "Malignant (1)": int(class_counts.get("M", 0))
+        },
+        "missing_values": int(df.isnull().sum().sum()),
+        "duplicates": int(df.duplicated().sum()),
+        "is_valid": len(feature_cols) == 30 and df.isnull().sum().sum() == 0 and df.shape[0] > 0
+    }
 
 
 def prepare_features_and_target(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
@@ -70,8 +143,8 @@ def prepare_features_and_target(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Seri
 
     Encoding:
     ---------
-    Malignant (M) -> 1
-    Benign (B)    -> 0
+    Malignant (M) -> 1 (Positive class in clinical diagnosis)
+    Benign (B)    -> 0 (Negative class)
 
     Parameters
     ----------
@@ -88,15 +161,22 @@ def prepare_features_and_target(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Seri
     if "diagnosis" not in df.columns:
         raise ValueError("Missing 'diagnosis' column in dataset.")
 
-    y = df["diagnosis"].map({"M": 1, "B": 0})
+    y = df["diagnosis"].map({"M": 1, "B": 0}).astype(int)
     X = df.drop(columns=["diagnosis"])
+
+    # Ensure consistent canonical feature ordering
+    ordered_cols = [col for col in FEATURE_NAMES if col in X.columns]
+    if len(ordered_cols) == len(FEATURE_NAMES):
+        X = X[FEATURE_NAMES]
+
     return X, y
 
 
 def get_train_test_split(
     csv_path: Optional[str] = None,
     test_size: float = 0.2,
-    random_state: int = 2
+    random_state: int = 42,
+    stratify: bool = True
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Load data and split into train and test partitions.
@@ -107,8 +187,10 @@ def get_train_test_split(
         Path to data.csv.
     test_size : float, default=0.2
         Fraction of data reserved for out-of-sample evaluation.
-    random_state : int, default=2
-        Seed to ensure deterministic reproducibility (achieves 97.37% test accuracy).
+    random_state : int, default=42
+        Seed to ensure deterministic reproducibility.
+    stratify : bool, default=True
+        Whether to perform stratified sampling based on the target class.
 
     Returns
     -------
@@ -116,12 +198,22 @@ def get_train_test_split(
     """
     df = load_raw_dataset(csv_path)
     X, y = prepare_features_and_target(df)
-    return train_test_split(X, y, test_size=test_size, random_state=random_state)
+    stratify_target = y if stratify else None
+    return train_test_split(
+        X, y,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=stratify_target
+    )
 
 
 if __name__ == "__main__":
+    df_raw = load_raw_dataset()
+    val_report = validate_dataset(df_raw)
+    print("Dataset Validation Report:")
+    for k, v in val_report.items():
+        if k != "feature_names":
+            print(f"  {k}: {v}")
     X_train, X_test, y_train, y_test = get_train_test_split()
-    print(f"Data Loaded Successfully!")
-    print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
-    print(f"X_test shape:  {X_test.shape},  y_test shape:  {y_test.shape}")
-    print(f"Malignant ratio: {y_train.mean():.2%}")
+    print(f"\nTrain set shape: {X_train.shape}, Test set shape: {X_test.shape}")
+    print(f"Train Malignant ratio: {y_train.mean():.2%}, Test Malignant ratio: {y_test.mean():.2%}")

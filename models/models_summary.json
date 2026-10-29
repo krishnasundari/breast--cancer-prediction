@@ -1,0 +1,79 @@
+{
+  "best_model": "svm",
+  "models_evaluated": [
+    "knn",
+    "logistic_regression",
+    "svm",
+    "random_forest"
+  ],
+  "evaluation_metrics": [
+    {
+      "Model": "svm",
+      "CV_Accuracy_Mean": 0.9714285714285713,
+      "CV_Accuracy_Std": 0.00538349394018279,
+      "CV_Recall_Mean": 0.9470588235294116,
+      "CV_F1_Mean": 0.9609865990024025,
+      "CV_ROC_AUC_Mean": 0.9949432404540763,
+      "Test_Accuracy": 0.9736842105263158,
+      "Test_Malignant_Precision": 1.0,
+      "Test_Malignant_Recall": 0.9285714285714286,
+      "Test_Malignant_F1": 0.962962962962963,
+      "Test_ROC_AUC": 0.9947089947089947,
+      "Test_TP": 39,
+      "Test_TN": 72,
+      "Test_FP": 0,
+      "Test_FN": 3
+    },
+    {
+      "Model": "random_forest",
+      "CV_Accuracy_Mean": 0.964835164835165,
+      "CV_Accuracy_Std": 0.014578570507056717,
+      "CV_Recall_Mean": 0.9411764705882353,
+      "CV_F1_Mean": 0.9519447457150247,
+      "CV_ROC_AUC_Mean": 0.9889060887512902,
+      "Test_Accuracy": 0.9736842105263158,
+      "Test_Malignant_Precision": 1.0,
+      "Test_Malignant_Recall": 0.9285714285714286,
+      "Test_Malignant_F1": 0.962962962962963,
+      "Test_ROC_AUC": 0.9928902116402116,
+      "Test_TP": 39,
+      "Test_TN": 72,
+      "Test_FP": 0,
+      "Test_FN": 3
+    },
+    {
+      "Model": "logistic_regression",
+      "CV_Accuracy_Mean": 0.9736263736263737,
+      "CV_Accuracy_Std": 0.014906219743132443,
+      "CV_Recall_Mean": 0.9529411764705882,
+      "CV_F1_Mean": 0.9640480895915677,
+      "CV_ROC_AUC_Mean": 0.9957688338493291,
+      "Test_Accuracy": 0.9649122807017544,
+      "Test_Malignant_Precision": 0.975,
+      "Test_Malignant_Recall": 0.9285714285714286,
+      "Test_Malignant_F1": 0.951219512195122,
+      "Test_ROC_AUC": 0.996031746031746,
+      "Test_TP": 39,
+      "Test_TN": 71,
+      "Test_FP": 1,
+      "Test_FN": 3
+    },
+    {
+      "Model": "knn",
+      "CV_Accuracy_Mean": 0.9714285714285713,
+      "CV_Accuracy_Std": 0.014906219743132469,
+      "CV_Recall_Mean": 0.9352941176470587,
+      "CV_F1_Mean": 0.9604565817559673,
+      "CV_ROC_AUC_Mean": 0.987874097007224,
+      "Test_Accuracy": 0.9473684210526315,
+      "Test_Malignant_Precision": 0.9736842105263158,
+      "Test_Malignant_Recall": 0.8809523809523809,
+      "Test_Malignant_F1": 0.925,
+      "Test_ROC_AUC": 0.9828042328042328,
+      "Test_TP": 37,
+      "Test_TN": 71,
+      "Test_FP": 1,
+      "Test_FN": 5
+    }
+  ]
+}

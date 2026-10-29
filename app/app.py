@@ -2,7 +2,8 @@
 app.py
 ======
 Interactive Streamlit Web Application for Breast Cancer Biopsy Prediction.
-Allows clinicians, researchers, and interviewers to test real-time KNN inference.
+Allows clinicians, researchers, and interviewers to compare multiple trained ML models
+(KNN, Logistic Regression, SVM, Random Forest) and test real-time inference.
 """
 
 import os
@@ -18,7 +19,7 @@ from src.predict import load_trained_pipeline, predict
 from src.data_loader import load_raw_dataset
 
 st.set_page_config(
-    page_title="Breast Cancer Detection | KNN Diagnostic Platform",
+    page_title="Breast Cancer Detection | Multi-Model Diagnostic Platform",
     page_icon="🎗️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -69,18 +70,38 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Header
-st.markdown('<div class="main-title">🎗️ Breast Cancer Detection — K-Nearest Neighbors</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Clinical Diagnostic Platform powered by an End-to-End Scikit-Learn Pipeline achieving <b>97.3% Classification Accuracy</b> on the Wisconsin Diagnostic Dataset.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">🎗️ Breast Cancer Detection — Multi-Model Diagnostic Platform</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Clinical Diagnostic Platform powered by an End-to-End Scikit-Learn Pipeline comparing <b>KNN, Logistic Regression, SVM, and Random Forest</b> on the Wisconsin Diagnostic Dataset.</div>', unsafe_allow_html=True)
+
+# Sidebar - Model Selection
+st.sidebar.header("🤖 Model Selection")
+MODEL_NAME_TO_KEY = {
+    "K-Nearest Neighbors (KNN)": "knn",
+    "Support Vector Machine (SVM)": "svm",
+    "Random Forest": "random_forest",
+    "Logistic Regression": "logistic_regression"
+}
+
+selected_model_name = st.sidebar.selectbox(
+    "Choose Active Classifier:",
+    options=list(MODEL_NAME_TO_KEY.keys()),
+    index=0
+)
+selected_model_key = MODEL_NAME_TO_KEY[selected_model_name]
 
 # Load Model
 @st.cache_resource
-def get_model():
-    return load_trained_pipeline()
+def get_model(model_key: str):
+    return load_trained_pipeline(model_key)
 
-artifact = get_model()
-pipeline = artifact["pipeline"]
-feature_names = artifact["feature_names"]
-metrics = artifact["metrics"]
+try:
+    artifact = get_model(selected_model_key)
+    pipeline = artifact["pipeline"]
+    feature_names = artifact["feature_names"]
+    metrics = artifact.get("metrics", {})
+except Exception as e:
+    st.error(f"Error loading model '{selected_model_name}': {e}. Please ensure 'python -m src.train' was executed.")
+    st.stop()
 
 # Sidebar - Biopsy Sample Selection & Feature Input
 st.sidebar.header("🔬 Biopsy Feature Controls")
@@ -136,10 +157,10 @@ for feat in feature_names:
 col_pred, col_metrics = st.columns([1.1, 0.9])
 
 with col_pred:
-    st.subheader("🩺 Diagnostic Prediction Result")
+    st.subheader(f"🩺 Diagnostic Prediction ({selected_model_name})")
     
-    # Run Inference
-    result = predict(input_data)
+    # Run Inference with selected model
+    result = predict(input_data, model_name_or_path=selected_model_key)
     diag = result["diagnosis"]
     prob_m = result["probability_malignant"]
     prob_b = result["probability_benign"]
@@ -159,37 +180,71 @@ with col_pred:
     st.progress(prob_b, text=f"Benign Probability: {prob_b * 100:.1f}%")
 
     st.info("""
-    **Clinical Guidance:**
-    In oncological screening, **Recall** is prioritized to ensure near-zero False Negatives (FN). 
-    A Malignant classification triggers immediate histopathology confirmation and targeted imaging.
+    **Clinical Screening Note:**
+    In oncological screening, **Recall** is critical to prevent False Negatives (FN). 
+    A Malignant classification indicates elevated risk requiring targeted diagnostic imaging and histopathological review.
     """)
 
 with col_metrics:
-    st.subheader("📊 Model Performance Benchmark")
+    st.subheader(f"📊 {selected_model_name} Benchmark")
+    acc = metrics.get('accuracy', 0.0)
+    prec = metrics.get('precision', 0.0)
+    rec = metrics.get('recall_sensitivity', 0.0)
+    f1 = metrics.get('f1_score', 0.0)
+    roc_auc = metrics.get('roc_auc', 0.0)
+
     m1, m2 = st.columns(2)
-    m1.metric("Classification Accuracy", f"{metrics['accuracy'] * 100:.1f}%", "Target: 97.3%")
-    m2.metric("Malignant Precision", f"{metrics['precision'] * 100:.1f}%", "Zero False Positives")
+    m1.metric("Test Accuracy", f"{acc * 100:.2f}%")
+    m2.metric("Malignant Precision", f"{prec * 100:.2f}%")
     
     m3, m4 = st.columns(2)
-    m3.metric("Malignant Recall", f"{metrics['recall_sensitivity'] * 100:.1f}%", "Sensitivity")
-    m4.metric("F1-Score", f"{metrics['f1_score'] * 100:.1f}%", "Balanced Metric")
+    m3.metric("Malignant Recall", f"{rec * 100:.2f}%")
+    m4.metric("F1-Score", f"{f1 * 100:.2f}%")
 
-    st.markdown("""
+    arch_descriptions = {
+        "knn": "• Algorithm: Distance-Weighted K-Nearest Neighbors (KNN)<br>• Optimal K: 6 neighbors<br>• Preprocessing: StandardScaler (Z-score normalization)<br>• Distance Metric: Euclidean Distance",
+        "svm": "• Algorithm: Support Vector Classifier (RBF Kernel)<br>• Regularization (C): 1.0<br>• Preprocessing: StandardScaler<br>• Probability Calibration: Platt Scaling",
+        "random_forest": "• Algorithm: Random Forest Classifier (100 Trees)<br>• Splitting Criterion: Gini Impurity<br>• Preprocessing: Raw continuous features (scale-invariant)<br>• Random Seed: 42",
+        "logistic_regression": "• Algorithm: Logistic Regression (L2 Regularization)<br>• Solver: L-BFGS (max_iter=1000)<br>• Preprocessing: StandardScaler<br>• Random Seed: 42"
+    }
+
+    st.markdown(f"""
     <div class="metric-card">
-    <b>Model Architecture:</b><br>
-    • Algorithm: Distance-Weighted K-Nearest Neighbors (KNN)<br>
-    • Optimal K: 6 neighbors (via Elbow Method)<br>
-    • Scaling: Standard Scaler (Z-Score Normalization)<br>
-    • Distance Metric: Euclidean Distance (L2 norm)
+    <b>Model Architecture & Setup:</b><br>
+    {arch_descriptions.get(selected_model_key, 'Standard Scikit-Learn Pipeline')}
     </div>
     """, unsafe_allow_html=True)
 
 # Tabs for Diagnostic Visualizations
 st.write("---")
-st.subheader("📈 Diagnostic Analytics & Evaluation Visualizations")
-tab1, tab2, tab3 = st.tabs(["📉 Confusion Matrix", "⚡ Error Rate vs. K (Elbow Plot)", "🎯 ROC-AUC Curve"])
+st.subheader("📈 Diagnostic Analytics & Multi-Model Evaluation")
+tab_comp, tab1, tab2, tab3 = st.tabs([
+    "🏆 4-Model Comparison",
+    "📉 Confusion Matrix",
+    "⚡ Error Rate vs. K (Elbow Plot)",
+    "🎯 ROC-AUC Curves"
+])
 
-assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+assets_dir = os.path.join(base_dir, "assets")
+reports_dir = os.path.join(base_dir, "reports")
+
+with tab_comp:
+    st.write("### Benchmark Comparison across 4 Classification Algorithms")
+    csv_path = os.path.join(reports_dir, "model_comparison.csv")
+    if os.path.exists(csv_path):
+        df_comp = pd.read_csv(csv_path)
+        st.dataframe(df_comp, use_container_width=True)
+    
+    col_img1, col_img2 = st.columns(2)
+    with col_img1:
+        comp_img = os.path.join(assets_dir, "model_comparison.png")
+        if os.path.exists(comp_img):
+            st.image(comp_img, caption="Multi-Metric Model Comparison (Test vs CV)", use_container_width=True)
+    with col_img2:
+        roc_multi_img = os.path.join(assets_dir, "multi_roc_curves.png")
+        if os.path.exists(roc_multi_img):
+            st.image(roc_multi_img, caption="Multi-Model ROC Curves Comparison", use_container_width=True)
 
 with tab1:
     cm_path = os.path.join(assets_dir, "confusion_matrix.png")

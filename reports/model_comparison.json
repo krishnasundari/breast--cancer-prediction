@@ -1,0 +1,182 @@
+{
+  "knn": {
+    "cv_metrics": {
+      "cv_folds": 5,
+      "cv_accuracy_mean": 0.9714285714285713,
+      "cv_accuracy_std": 0.014906219743132469,
+      "cv_precision_mean": 0.9876660341555977,
+      "cv_precision_std": 0.015132752969546017,
+      "cv_recall_mean": 0.9352941176470587,
+      "cv_recall_std": 0.03429971702850178,
+      "cv_f1_mean": 0.9604565817559673,
+      "cv_f1_std": 0.02114246890906293,
+      "cv_roc_auc_mean": 0.987874097007224,
+      "cv_roc_auc_std": 0.013618772413574518
+    },
+    "test_metrics": {
+      "accuracy": 0.9473684210526315,
+      "malignant_precision": 0.9736842105263158,
+      "malignant_recall": 0.8809523809523809,
+      "malignant_f1": 0.925,
+      "benign_precision": 0.9342105263157895,
+      "benign_recall": 0.9861111111111112,
+      "benign_f1": 0.9594594594594595,
+      "specificity": 0.9861111111111112,
+      "macro_f1": 0.9422297297297297,
+      "weighted_f1": 0.9467638691322903,
+      "roc_auc": 0.9828042328042328,
+      "confusion_matrix": {
+        "true_negatives": 71,
+        "false_positives": 1,
+        "false_negatives": 5,
+        "true_positives": 37
+      },
+      "raw_confusion_matrix": [
+        [
+          71,
+          1
+        ],
+        [
+          5,
+          37
+        ]
+      ],
+      "classification_report": "               precision    recall  f1-score   support\n\n   Benign (0)     0.9342    0.9861    0.9595        72\nMalignant (1)     0.9737    0.8810    0.9250        42\n\n     accuracy                         0.9474       114\n    macro avg     0.9539    0.9335    0.9422       114\n weighted avg     0.9488    0.9474    0.9468       114\n"
+    }
+  },
+  "logistic_regression": {
+    "cv_metrics": {
+      "cv_folds": 5,
+      "cv_accuracy_mean": 0.9736263736263737,
+      "cv_accuracy_std": 0.014906219743132443,
+      "cv_precision_mean": 0.9771428571428572,
+      "cv_precision_std": 0.027994168488950616,
+      "cv_recall_mean": 0.9529411764705882,
+      "cv_recall_std": 0.03989605872426629,
+      "cv_f1_mean": 0.9640480895915677,
+      "cv_f1_std": 0.020700447685741707,
+      "cv_roc_auc_mean": 0.9957688338493291,
+      "cv_roc_auc_std": 0.004665698474904977
+    },
+    "test_metrics": {
+      "accuracy": 0.9649122807017544,
+      "malignant_precision": 0.975,
+      "malignant_recall": 0.9285714285714286,
+      "malignant_f1": 0.951219512195122,
+      "benign_precision": 0.9594594594594594,
+      "benign_recall": 0.9861111111111112,
+      "benign_f1": 0.9726027397260274,
+      "specificity": 0.9861111111111112,
+      "macro_f1": 0.9619111259605747,
+      "weighted_f1": 0.9647247085304307,
+      "roc_auc": 0.996031746031746,
+      "confusion_matrix": {
+        "true_negatives": 71,
+        "false_positives": 1,
+        "false_negatives": 3,
+        "true_positives": 39
+      },
+      "raw_confusion_matrix": [
+        [
+          71,
+          1
+        ],
+        [
+          3,
+          39
+        ]
+      ],
+      "classification_report": "               precision    recall  f1-score   support\n\n   Benign (0)     0.9595    0.9861    0.9726        72\nMalignant (1)     0.9750    0.9286    0.9512        42\n\n     accuracy                         0.9649       114\n    macro avg     0.9672    0.9573    0.9619       114\n weighted avg     0.9652    0.9649    0.9647       114\n"
+    }
+  },
+  "svm": {
+    "cv_metrics": {
+      "cv_folds": 5,
+      "cv_accuracy_mean": 0.9714285714285713,
+      "cv_accuracy_std": 0.00538349394018279,
+      "cv_precision_mean": 0.9769459298871064,
+      "cv_precision_std": 0.021034707309092283,
+      "cv_recall_mean": 0.9470588235294116,
+      "cv_recall_std": 0.03429971702850178,
+      "cv_f1_mean": 0.9609865990024025,
+      "cv_f1_std": 0.008202524551695449,
+      "cv_roc_auc_mean": 0.9949432404540763,
+      "cv_roc_auc_std": 0.00496429864635942
+    },
+    "test_metrics": {
+      "accuracy": 0.9736842105263158,
+      "malignant_precision": 1.0,
+      "malignant_recall": 0.9285714285714286,
+      "malignant_f1": 0.962962962962963,
+      "benign_precision": 0.96,
+      "benign_recall": 1.0,
+      "benign_f1": 0.9795918367346939,
+      "specificity": 1.0,
+      "macro_f1": 0.9712773998488284,
+      "weighted_f1": 0.9734654095556352,
+      "roc_auc": 0.9947089947089947,
+      "confusion_matrix": {
+        "true_negatives": 72,
+        "false_positives": 0,
+        "false_negatives": 3,
+        "true_positives": 39
+      },
+      "raw_confusion_matrix": [
+        [
+          72,
+          0
+        ],
+        [
+          3,
+          39
+        ]
+      ],
+      "classification_report": "               precision    recall  f1-score   support\n\n   Benign (0)     0.9600    1.0000    0.9796        72\nMalignant (1)     1.0000    0.9286    0.9630        42\n\n     accuracy                         0.9737       114\n    macro avg     0.9800    0.9643    0.9713       114\n weighted avg     0.9747    0.9737    0.9735       114\n"
+    }
+  },
+  "random_forest": {
+    "cv_metrics": {
+      "cv_folds": 5,
+      "cv_accuracy_mean": 0.964835164835165,
+      "cv_accuracy_std": 0.014578570507056717,
+      "cv_precision_mean": 0.9640949238933111,
+      "cv_precision_std": 0.010688115585066353,
+      "cv_recall_mean": 0.9411764705882353,
+      "cv_recall_std": 0.04159451654038516,
+      "cv_f1_mean": 0.9519447457150247,
+      "cv_f1_std": 0.020731700210767683,
+      "cv_roc_auc_mean": 0.9889060887512902,
+      "cv_roc_auc_std": 0.006733696704957603
+    },
+    "test_metrics": {
+      "accuracy": 0.9736842105263158,
+      "malignant_precision": 1.0,
+      "malignant_recall": 0.9285714285714286,
+      "malignant_f1": 0.962962962962963,
+      "benign_precision": 0.96,
+      "benign_recall": 1.0,
+      "benign_f1": 0.9795918367346939,
+      "specificity": 1.0,
+      "macro_f1": 0.9712773998488284,
+      "weighted_f1": 0.9734654095556352,
+      "roc_auc": 0.9928902116402116,
+      "confusion_matrix": {
+        "true_negatives": 72,
+        "false_positives": 0,
+        "false_negatives": 3,
+        "true_positives": 39
+      },
+      "raw_confusion_matrix": [
+        [
+          72,
+          0
+        ],
+        [
+          3,
+          39
+        ]
+      ],
+      "classification_report": "               precision    recall  f1-score   support\n\n   Benign (0)     0.9600    1.0000    0.9796        72\nMalignant (1)     1.0000    0.9286    0.9630        42\n\n     accuracy                         0.9737       114\n    macro avg     0.9800    0.9643    0.9713       114\n weighted avg     0.9747    0.9737    0.9735       114\n"
+    }
+  }
+}
