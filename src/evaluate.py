@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
-    confusion_matrix, classification_report, roc_auc_score, roc_curve, auc
+    confusion_matrix, classification_report, roc_auc_score, roc_curve, auc,
+    precision_recall_curve, average_precision_score
 )
 
 
@@ -42,22 +43,27 @@ def evaluate_model(
     """
     y_pred = model.predict(X_test)
 
-    # Probabilities for ROC-AUC
+    # Probabilities for ROC-AUC and PR-AUC
     y_prob = None
     auc_score = None
+    pr_auc_score = None
     if hasattr(model, "predict_proba"):
         try:
             y_prob = model.predict_proba(X_test)[:, 1]
             auc_score = float(roc_auc_score(y_test, y_prob))
+            pr_auc_score = float(average_precision_score(y_test, y_prob))
         except Exception:
             y_prob = None
             auc_score = None
+            pr_auc_score = None
     elif hasattr(model, "decision_function"):
         try:
             y_decision = model.decision_function(X_test)
             auc_score = float(roc_auc_score(y_test, y_decision))
+            pr_auc_score = float(average_precision_score(y_test, y_decision))
         except Exception:
             auc_score = None
+            pr_auc_score = None
 
     acc = float(accuracy_score(y_test, y_pred))
     # Malignant metrics (pos_label=1)
@@ -73,6 +79,8 @@ def evaluate_model(
     cm = confusion_matrix(y_test, y_pred)
     tn, fp, fn, tp = cm.ravel()
     specificity = float(tn / (tn + fp)) if (tn + fp) > 0 else 0.0
+    fnr_malignant = float(fn / (fn + tp)) if (fn + tp) > 0 else 0.0
+    fdr = float(fp / (fp + tp)) if (fp + tp) > 0 else 0.0
 
     metrics = {
         "accuracy": acc,
@@ -86,9 +94,12 @@ def evaluate_model(
         "benign_recall": rec_ben,
         "benign_f1": f1_ben,
         "specificity": specificity,
+        "false_negative_rate_malignant": fnr_malignant,
+        "false_discovery_rate": fdr,
         "macro_f1": float(f1_score(y_test, y_pred, average="macro", zero_division=0)),
         "weighted_f1": float(f1_score(y_test, y_pred, average="weighted", zero_division=0)),
         "roc_auc": auc_score,
+        "pr_auc": pr_auc_score,
         "confusion_matrix": {
             "true_negatives": int(tn),
             "false_positives": int(fp),
@@ -207,6 +218,9 @@ def compare_all_models(
             "Test_Malignant_Recall": test_metrics["malignant_recall"],
             "Test_Malignant_F1": test_metrics["malignant_f1"],
             "Test_ROC_AUC": test_metrics["roc_auc"],
+            "Test_PR_AUC": test_metrics.get("pr_auc"),
+            "Test_Malignant_FNR": test_metrics.get("false_negative_rate_malignant"),
+            "Test_FDR": test_metrics.get("false_discovery_rate"),
             "Test_TP": cm["true_positives"],
             "Test_TN": cm["true_negatives"],
             "Test_FP": cm["false_positives"],
@@ -303,6 +317,55 @@ def plot_multi_roc_curves(
     plt.ylabel("True Positive Rate (Sensitivity / Recall)", fontsize=11)
     plt.title("Multi-Model Receiver Operating Characteristic (ROC)", fontsize=13, fontweight="bold", pad=12)
     plt.legend(loc="lower right", fontsize=10)
+    plt.grid(True, linestyle=":", alpha=0.6)
+    plt.tight_layout()
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+
+
+def plot_multi_pr_curves(
+    models_dict: Dict[str, Any],
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    output_path: str
+):
+    """
+    Plots combined Precision-Recall curves across all trained models.
+    Particularly informative in clinical diagnostics where Malignant is the positive event.
+    """
+    plt.figure(figsize=(8, 6), dpi=300)
+    colors = {
+        "knn": "#4A148C",
+        "logistic_regression": "#1E88E5",
+        "svm": "#00897B",
+        "random_forest": "#E53935"
+    }
+
+    for name, pipeline in models_dict.items():
+        if hasattr(pipeline, "predict_proba"):
+            y_prob = pipeline.predict_proba(X_test)[:, 1]
+        elif hasattr(pipeline, "decision_function"):
+            y_prob = pipeline.decision_function(X_test)
+        else:
+            continue
+
+        precision, recall, _ = precision_recall_curve(y_test, y_prob)
+        pr_auc = average_precision_score(y_test, y_prob)
+        display_name = name.replace("_", " ").title()
+        color = colors.get(name, "#333333")
+        plt.plot(recall, precision, lw=2.2, color=color, label=f"{display_name} (PR-AUC = {pr_auc:.4f})")
+
+    # Baseline rate (prevalence of Malignant class in test set)
+    prevalence = float(y_test.sum() / len(y_test))
+    plt.axhline(y=prevalence, color="#9E9E9E", lw=1.5, linestyle="--", label=f"Baseline Prevalence ({prevalence*100:.1f}%)")
+    plt.xlim([-0.02, 1.02])
+    plt.ylim([0.4, 1.05])
+    plt.xlabel("Malignant Recall / Sensitivity", fontsize=11)
+    plt.ylabel("Malignant Precision / PPV", fontsize=11)
+    plt.title("Multi-Model Precision-Recall (PR) Curves", fontsize=13, fontweight="bold", pad=12)
+    plt.legend(loc="lower left", fontsize=10)
     plt.grid(True, linestyle=":", alpha=0.6)
     plt.tight_layout()
 

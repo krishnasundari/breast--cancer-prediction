@@ -28,19 +28,19 @@ This project verifies and substantiates the credentials submitted in my resume:
 
 All 4 classification models were trained and benchmarked under identical stratified 80/20 train/test splits (`random_state=42`), with 5-fold stratified cross-validation performed strictly on the training partition:
 
-| Model Architecture | Preprocessing / Scaling | 5-Fold CV Accuracy | Test Accuracy | Malignant Precision | Malignant Recall | Malignant F1 | Test ROC-AUC | Test Confusion (TP / TN / FP / FN) |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Support Vector Machine (SVM)** | `StandardScaler` + RBF Kernel | **97.14% (±0.54%)** | **97.37%** (111/114) | **100.00%** | **92.86%** | **96.30%** | **0.9947** | 39 / 72 / 0 / 3 |
-| **Random Forest** | Scale-Invariant (No Scaler) | **96.48% (±1.46%)** | **97.37%** (111/114) | **100.00%** | **92.86%** | **96.30%** | **0.9929** | 39 / 72 / 0 / 3 |
-| **Logistic Regression** | `StandardScaler` + L2 Regularization | **97.36% (±1.49%)** | **96.49%** (110/114) | **97.50%** | **92.86%** | **95.12%** | **0.9960** | 39 / 71 / 1 / 3 |
-| **K-Nearest Neighbors (KNN)** | `StandardScaler` + Distance Weighted | **97.14% (±1.49%)** | **94.74%** (108/114)* | **97.37%** | **88.10%** | **92.50%** | **0.9828** | 37 / 71 / 1 / 5 |
+| Model Architecture | Preprocessing / Scaling | 5-Fold CV Accuracy | Test Accuracy | Malignant Precision | Malignant Recall | Malignant F1 | Test ROC-AUC | Test PR-AUC | False Negatives (FNR) | False Positives (FDR) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Support Vector Machine (SVM)** | `StandardScaler` + RBF Kernel | **97.14% (±0.54%)** | **97.37%** (111/114) | **100.00%** | **92.86%** | **96.30%** | **0.9947** | **0.9927** | 3 (7.14%) | 0 (0.00%) |
+| **Random Forest** | Scale-Invariant (No Scaler) | **96.48% (±1.46%)** | **97.37%** (111/114) | **100.00%** | **92.86%** | **96.30%** | **0.9929** | **0.9893** | 3 (7.14%) | 0 (0.00%) |
+| **Logistic Regression** | `StandardScaler` + L2 Regularization | **97.36% (±1.49%)** | **96.49%** (110/114) | **97.50%** | **92.86%** | **95.12%** | **0.9960** | **0.9943** | 3 (7.14%) | 1 (2.50%) |
+| **K-Nearest Neighbors (KNN)** | `StandardScaler` + Distance Weighted | **97.14% (±1.49%)** | **94.74%** (108/114)* | **97.37%** | **88.10%** | **92.50%** | **0.9828** | **0.9775** | 5 (11.90%) | 1 (2.63%) |
 
 *\*Note: On non-stratified random_state=2 split, KNN achieves **97.37% test accuracy** with 0 False Positives, verifying resume credentials.*
 
 ### Multi-Model Visualizations
-| Multi-Model Metric Comparison | Multi-Model ROC Curves |
-| :---: | :---: |
-| ![Model Comparison](assets/model_comparison.png) | ![Multi ROC](assets/multi_roc_curves.png) |
+| Multi-Model Metric Comparison | Multi-Model ROC Curves | Multi-Model Precision-Recall (PR) Curves |
+| :---: | :---: | :---: |
+| ![Model Comparison](assets/model_comparison.png) | ![Multi ROC](assets/multi_roc_curves.png) | ![Multi PR](assets/multi_pr_curves.png) |
 
 ---
 
@@ -197,6 +197,36 @@ breast--cancer-prediction/
 ├── LICENSE                                   # MIT License
 └── README.md                                 # Project documentation
 ```
+
+---
+
+## 🖥️ Interactive Streamlit Application Architecture
+
+The web application ([`app/app.py`](app/app.py)) is organized into four modular clinical and diagnostic sections:
+
+1. **🔮 Prediction Module:**
+   - Real-time biopsy malignancy classification and confidence score.
+   - Dynamic probability distribution progress bars ($P(\text{Malignant})$ vs $P(\text{Benign})$).
+   - Clinical risk stratification: *Low Risk (Likely Benign)*, *Borderline / Intermediate (Recommend Biopsy Review)*, *High Risk (Strong Indication of Malignancy)*.
+   - Live performance scorecard for the selected model.
+
+2. **📊 Model Comparison Module:**
+   - Unified cross-architecture comparison table featuring Accuracy, Malignant Recall/Sensitivity, Precision, F1-Score, ROC-AUC, PR-AUC, and False-Negative counts.
+   - Comparative multi-metric bar charts, ROC curves, Precision-Recall curves, and test confusion matrices.
+   - Critical false-negative and false-positive diagnostic trade-off analysis.
+
+3. **🧠 Explainable AI (SHAP) Module:**
+   - Explicitly distinguishes between **Probability Attribution ($\Delta P(\text{Malignant})$)** for Random Forest, SVM, and KNN, and **Log-Odds Margin ($\Delta \text{Logit}$)** for Logistic Regression.
+   - Interactive local waterfall plots displaying individual patient cellular feature contributions against population baseline rate $E[f(X)]$.
+   - Directional risk factor cards (features elevating risk vs lowering risk).
+   - Global clinical biomarker reliance rankings and TreeSHAP beeswarm summary plots.
+
+4. **ℹ️ About the Project Module:**
+   - Dataset background (Wisconsin Diagnostic Dataset, FNA cytology).
+   - Clinical definitions for all 30 cellular morphological characteristics across Mean, SE, and Worst.
+   - Mathematical formulation of all 4 classification algorithms.
+   - Methodological engineering principles (zero data leakage, stratified splitting, seed reproducibility).
+   - Educational-use-only medical disclaimer.
 
 ---
 

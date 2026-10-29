@@ -85,12 +85,15 @@ def test_unsupported_model_raises_value_error():
 
 def test_local_explanation_structure_and_types():
     """Verify explain_instance outputs correct structure, Malignant class focus, and types."""
+    # Test Probability-based model (Random Forest)
     exp_rf = explain_instance(MALIGNANT_SAMPLE, model_name="random_forest")
 
     assert exp_rf["model_name"] == "random_forest"
     assert exp_rf["explainer_type"] == "TreeExplainer"
     assert exp_rf["diagnosis"] == "Malignant"
     assert exp_rf["prediction_code"] == 1
+    assert exp_rf["score_type"] == "probability"
+    assert "Probability" in exp_rf["unit_label"]
     assert 0.0 <= exp_rf["probability_malignant"] <= 1.0
     assert "score_name" in exp_rf
     assert isinstance(exp_rf["shap_explanation"], shap.Explanation)
@@ -103,6 +106,14 @@ def test_local_explanation_structure_and_types():
         assert item["shap_value"] > 0
         assert "feature" in item
         assert "direction" in item
+
+    # Test Log-Odds margin model (Logistic Regression)
+    exp_lr = explain_instance(MALIGNANT_SAMPLE, model_name="logistic_regression")
+    assert exp_lr["model_name"] == "logistic_regression"
+    assert exp_lr["explainer_type"] == "LinearExplainer"
+    assert exp_lr["score_type"] == "log_odds"
+    assert "Log-Odds" in exp_lr["unit_label"]
+    assert isinstance(exp_lr["model_score"], float)
 
 
 def test_feature_ordering_invariance_in_explanations():

@@ -33,6 +33,7 @@ from src.evaluate import (
     save_comparison_reports,
     plot_model_comparison,
     plot_multi_roc_curves,
+    plot_multi_pr_curves,
     print_evaluation_summary
 )
 
@@ -179,6 +180,10 @@ def train_and_compare_all_models(
     roc_plot = os.path.join(assets_dir, "multi_roc_curves.png")
     plot_multi_roc_curves(models_dict, X_test, y_test, roc_plot)
     print(f"[OK] Multi-model ROC-AUC curve chart saved to  : {roc_plot}")
+
+    pr_plot = os.path.join(assets_dir, "multi_pr_curves.png")
+    plot_multi_pr_curves(models_dict, X_test, y_test, pr_plot)
+    print(f"[OK] Multi-model Precision-Recall curve saved to: {pr_plot}")
 
     # Save all four pipeline artifacts
     if save_models:

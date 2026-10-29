@@ -181,6 +181,8 @@ def explain_instance(
             shap_vals = raw_exp.values[0]
             base_val = float(raw_exp.base_values[0])
         score_name = "Probability of Malignancy (P(Malignant))"
+        score_type = "probability"
+        unit_label = "Probability (0.0 to 1.0)"
         model_score = prob_malignant
 
     elif explainer_type == "LinearExplainer":
@@ -190,9 +192,11 @@ def explain_instance(
         shap_vals = np.array(raw_exp.values[0], dtype=float)
         base_val = float(raw_exp.base_values[0]) if hasattr(raw_exp, "base_values") else 0.0
         score_name = "Log-Odds Margin (Logit toward Malignant)"
-        # Decision function / margin
+        score_type = "log_odds"
+        unit_label = "Log-Odds Margin (Logit)"
+        # Decision function / margin (evaluated using values to avoid feature names warning)
         estimator = pipeline.steps[-1][1]
-        model_score = float(estimator.decision_function(df_scaled)[0])
+        model_score = float(estimator.decision_function(df_scaled.values)[0])
 
     else:  # KernelExplainer (SVM / KNN)
         raw_vals = explainer.shap_values(df_aligned, nsamples=100, silent=True)
@@ -205,6 +209,8 @@ def explain_instance(
         
         base_val = float(explainer.expected_value if not isinstance(explainer.expected_value, (list, np.ndarray)) else explainer.expected_value[1] if len(explainer.expected_value) > 1 else explainer.expected_value[0])
         score_name = "Probability of Malignancy (P(Malignant))"
+        score_type = "probability"
+        unit_label = "Probability (0.0 to 1.0)"
         model_score = prob_malignant
 
     # Build shap.Explanation object with true clinical units
@@ -237,6 +243,8 @@ def explain_instance(
         "prediction_code": pred_class,
         "diagnosis": pred_label,
         "score_name": score_name,
+        "score_type": score_type,
+        "unit_label": unit_label,
         "model_score": model_score,
         "probability_malignant": prob_malignant,
         "base_value": base_val,
@@ -250,16 +258,26 @@ def explain_instance(
 def plot_local_waterfall(
     explanation: shap.Explanation,
     max_display: int = 10,
+    unit_label: Optional[str] = None,
     save_path: Optional[str] = None
 ) -> plt.Figure:
     """
     Renders and optionally saves a SHAP waterfall plot for an individual patient instance.
+    Explicitly labels whether the attribution is in probability or log-odds margin units.
     """
     fig = plt.figure(figsize=(10, 6))
     shap.plots.waterfall(explanation, max_display=max_display, show=False)
-    plt.title("SHAP Local Feature Attribution (Direction toward Malignant)", fontsize=12, pad=15)
-    plt.xlabel("SHAP Contribution Value", fontsize=10)
+    
+    unit_text = f" ({unit_label})" if unit_label else ""
+    plt.title(f"SHAP Local Feature Attribution toward Malignant{unit_text}", fontsize=11, pad=15)
+    plt.xlabel(f"SHAP Contribution Value{unit_text}", fontsize=10)
     plt.tight_layout()
+
+    if save_path:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    return fig
 
     if save_path:
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)

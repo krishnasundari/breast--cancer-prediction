@@ -145,6 +145,9 @@ def test_evaluation_metrics_generation():
     assert 0.0 <= metrics["recall_sensitivity"] <= 1.0
     assert 0.0 <= metrics["f1_score"] <= 1.0
     assert 0.0 <= metrics["roc_auc"] <= 1.0
+    assert 0.0 <= metrics["pr_auc"] <= 1.0
+    assert 0.0 <= metrics["false_negative_rate_malignant"] <= 1.0
+    assert 0.0 <= metrics["false_discovery_rate"] <= 1.0
     assert "confusion_matrix" in metrics
     cm = metrics["confusion_matrix"]
     assert cm["true_positives"] + cm["true_negatives"] + cm["false_positives"] + cm["false_negatives"] == len(y_test)
