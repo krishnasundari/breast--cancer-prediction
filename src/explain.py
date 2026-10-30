@@ -279,12 +279,6 @@ def plot_local_waterfall(
 
     return fig
 
-    if save_path:
-        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    return fig
-
 
 def compute_global_feature_importance(
     model_name: str = "random_forest",
