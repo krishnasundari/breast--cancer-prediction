@@ -170,24 +170,14 @@ def render_results_page():
     st.write("---")
 
     # =========================================================================
-    # SECTION C: Explain Why the Model Predicted This Result (SHAP)
+    # SECTION C: Explain Why the Model Predicted This Result (Simple Points & Cards)
     # =========================================================================
-    st.markdown('<div class="section-title">🧠 Section C: Explain Why the Model Predicted This Result (SHAP)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-caption">Shapley Additive exPlanations (SHAP) break down the prediction into simple factors pushing toward Malignant or Benign:</div>', unsafe_allow_html=True)
-
-    # Friendly Layman / Interview Explainer Card
-    with st.expander("💡 Plain-English Guide: How to Explain this in Interviews & to Doctors", expanded=True):
-        st.markdown("""
-        **Think of SHAP as a Tug-of-War game:**
-        * 🎯 **Baseline Rate ($E[f(X)] = 37.3\%$):** The neutral starting point — the average rate of breast malignancy in the historical dataset.
-        * 🔴 **Red Bars (+ Risk):** Cellular abnormalities (e.g. abnormally large nuclei or irregular notched edges) that **push the risk UP towards Malignant**.
-        * 🔵 **Blue Bars (− Risk):** Normal healthy characteristics (e.g. smooth cell texture) that **pull the risk DOWN towards Benign**.
-        * 🏁 **Final Score ($f(x) = 95.0\%$):** Baseline + (All Red Pulls) − (All Blue Pulls) = Patient's Final Risk Score.
-        """)
+    st.markdown('<div class="section-title">🧠 Section C: Why Did the Model Predict This? (AI Explanation in Simple Points)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-caption">Here is the exact breakdown of which biopsy measurements pushed the risk UP toward Malignant and which pulled it DOWN toward Benign:</div>', unsafe_allow_html=True)
 
     # Explainer Selector
     selected_xai_model = st.selectbox(
-        "Select Model to Inspect Explainability:",
+        "Select Model to Explain:",
         options=models_list,
         format_func=lambda x: model_display_names[x],
         index=3  # Default to Random Forest
@@ -195,79 +185,130 @@ def render_results_page():
 
     # Friendly human-readable feature labels dictionary
     FEATURE_HUMAN_NAMES = {
-        "area_worst": "Largest Nuclear Size (Area Worst)",
+        "area_worst": "Largest Cell Nucleus Size (Area Worst)",
         "concave points_worst": "Severe Edge Indentations (Concave Points Worst)",
-        "radius_worst": "Largest Nuclear Radius",
+        "radius_worst": "Largest Cell Radius",
         "perimeter_worst": "Outer Boundary Length (Perimeter Worst)",
-        "concave points_mean": "Average Border Indentations",
-        "concavity_worst": "Severity of Cell Border Hollows",
-        "texture_mean": "Cell Surface Texture (Chromatin Smoothness)",
-        "texture_worst": "Worst Texture Roughness",
-        "area_mean": "Average Nuclear Area",
+        "concave points_mean": "Average Cell Border Indentations",
+        "concavity_worst": "Severity of Cell Contour Hollows",
+        "texture_mean": "Cell Surface Texture (Smoothness)",
+        "texture_worst": "Cell Surface Roughness",
+        "area_mean": "Average Cell Nucleus Area",
         "perimeter_mean": "Average Cell Perimeter",
-        "radius_mean": "Average Nuclear Radius",
+        "radius_mean": "Average Cell Radius",
         "smoothness_worst": "Nuclear Smoothness Variation",
-        "compactness_worst": "Cell Compactness / Density",
-        "symmetry_worst": "Nuclear Asymmetry"
+        "compactness_worst": "Cell Density & Compactness",
+        "symmetry_worst": "Cell Nucleus Asymmetry"
     }
 
-    # Differentiate units clearly using clean styled markdown banners
-    if selected_xai_model == "logistic_regression":
-        st.markdown("""
-        <div style="background:#E1F5FE; border-left:4px solid #0288D1; padding:12px 16px; border-radius:6px; color:#01579B; margin-bottom:14px; font-size:0.9rem; line-height:1.5;">
-            <b>ℹ️ Explanation Unit: Log-Odds Margin (Logit)</b><br>
-            For Logistic Regression, LinearSHAP explains the shift in the linear margin (ΔLogit).
-            Positive values push log-odds toward Malignant; negative values push toward Benign.
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div style="background:#E1F5FE; border-left:4px solid #0288D1; padding:12px 16px; border-radius:6px; color:#01579B; margin-bottom:14px; font-size:0.9rem; line-height:1.5;">
-            <b>ℹ️ Explanation Unit: Probability of Malignancy (0.0 to 1.0)</b><br>
-            For Random Forest (TreeSHAP), SVM, and KNN (KernelSHAP), SHAP values directly represent the change in predicted risk (ΔP(Malignant)) away from the baseline cohort rate.
-        </div>
-        """, unsafe_allow_html=True)
-
-    with st.spinner(f"Computing local SHAP waterfall attribution for {model_display_names[selected_xai_model]}..."):
+    with st.spinner(f"Analyzing key decision factors for {model_display_names[selected_xai_model]}..."):
         try:
             explanation = explain_instance(patient_features, model_name=selected_xai_model)
             
-            x_col1, x_col2 = st.columns([1.05, 0.95])
+            # Simple 3-Column Summary Cards
+            sum_col1, sum_col2, sum_col3 = st.columns([1, 1.4, 1.4])
+            
+            with sum_col1:
+                st.markdown(f"""
+                <div style="background:#F8F9FA; border:1px solid #DEE2E6; border-radius:8px; padding:16px; height:100%;">
+                    <div style="font-size:0.85rem; color:#6C757D; font-weight:600; text-transform:uppercase;">1. Starting Point</div>
+                    <div style="font-size:1.6rem; font-weight:700; color:#0D1B2A; margin:6px 0;">{explanation['base_value'] * 100:.1f}%</div>
+                    <div style="font-size:0.85rem; color:#495057; line-height:1.4;">
+                        <b>Baseline Population Rate:</b> The historical average risk for breast biopsy patients before inspecting this case.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with sum_col2:
+                pos_count = len(explanation["top_positive_features"])
+                st.markdown(f"""
+                <div style="background:#FFF5F5; border:1px solid #FFC9C9; border-left:4px solid #E03131; border-radius:8px; padding:16px; height:100%;">
+                    <div style="font-size:0.85rem; color:#C92A2A; font-weight:600; text-transform:uppercase;">2. Red Flags ({pos_count})</div>
+                    <div style="font-size:1.2rem; font-weight:700; color:#E03131; margin:6px 0;">Pushed Risk UP ⬆️</div>
+                    <div style="font-size:0.85rem; color:#495057; line-height:1.4;">
+                        Measurements that showed abnormal cell enlargement or irregular shape, increasing malignancy suspicion.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-            with x_col1:
-                st.write(f"**Explainer Technique:** `{explanation['explainer_type']}`")
-                st.write(f"**Target Score:** `{explanation['model_score']:.4f}` ({explanation['unit_label']})")
-                st.write(f"**Baseline Cohort Rate ($E[f(X)]$):** `{explanation['base_value']:.4f}`")
+            with sum_col3:
+                neg_count = len(explanation["top_negative_features"])
+                st.markdown(f"""
+                <div style="background:#EBFBEE; border:1px solid #B2F2BB; border-left:4px solid #2F9E44; border-radius:8px; padding:16px; height:100%;">
+                    <div style="font-size:0.85rem; color:#2B8A3E; font-weight:600; text-transform:uppercase;">3. Healthy Signs ({neg_count})</div>
+                    <div style="font-size:1.2rem; font-weight:700; color:#2F9E44; margin:6px 0;">Pulled Risk DOWN ⬇️</div>
+                    <div style="font-size:0.85rem; color:#495057; line-height:1.4;">
+                        Measurements that looked normal or smooth, reducing suspicion toward a benign diagnosis.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                st.write("**Top Red Flags (Pushing Risk Towards Malignant):**")
+            st.write("")
+            
+            # Detailed Breakdown in Clean Points
+            f_col1, f_col2 = st.columns(2)
+
+            with f_col1:
+                st.markdown("#### 🚨 Top Red Flags (Pushed Risk Toward Malignant):")
                 if explanation["top_positive_features"]:
-                    for item in explanation["top_positive_features"]:
+                    for idx, item in enumerate(explanation["top_positive_features"][:4], 1):
                         f_raw = item["feature"]
                         f_label = FEATURE_HUMAN_NAMES.get(f_raw, f_raw.replace("_", " ").title())
+                        impact_pct = item["shap_value"] * 100
                         st.markdown(
-                            f'<div class="shap-factor-pos"><b>{f_label}:</b> '
-                            f'Measured = <code>{item["feature_value"]:.4f}</code> &nbsp;|&nbsp; '
-                            f'<b>+{item["shap_value"]:.4f}</b> contribution</div>',
+                            f"""
+                            <div style="background:#FFF0F3; border-left:4px solid #D6336C; padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
+                                <b>{idx}. {f_label}</b><br>
+                                Measured Value: <code>{item["feature_value"]:.2f}</code> &nbsp;|&nbsp; 
+                                <b style="color:#C2255C;">+{impact_pct:.1f}% risk increase</b>
+                            </div>
+                            """,
                             unsafe_allow_html=True
                         )
                 else:
-                    st.write("None: No features contributed positively toward malignancy.")
+                    st.info("✅ No features pushed toward malignancy.")
 
-                st.write("**Top Healthy Indicators (Pulling Risk Towards Benign):**")
+            with f_col2:
+                st.markdown("#### 🟢 Top Healthy Indicators (Pulled Risk Toward Benign):")
                 if explanation["top_negative_features"]:
-                    for item in explanation["top_negative_features"]:
+                    for idx, item in enumerate(explanation["top_negative_features"][:4], 1):
                         f_raw = item["feature"]
                         f_label = FEATURE_HUMAN_NAMES.get(f_raw, f_raw.replace("_", " ").title())
+                        impact_pct = abs(item["shap_value"] * 100)
                         st.markdown(
-                            f'<div class="shap-factor-neg"><b>{f_label}:</b> '
-                            f'Measured = <code>{item["feature_value"]:.4f}</code> &nbsp;|&nbsp; '
-                            f'<b>{item["shap_value"]:.4f}</b> contribution</div>',
+                            f"""
+                            <div style="background:#F4FCE3; border-left:4px solid #74B816; padding:10px 14px; border-radius:6px; margin-bottom:10px; font-size:0.9rem;">
+                                <b>{idx}. {f_label}</b><br>
+                                Measured Value: <code>{item["feature_value"]:.2f}</code> &nbsp;|&nbsp; 
+                                <b style="color:#5C940D;">-{impact_pct:.1f}% risk reduction</b>
+                            </div>
+                            """,
                             unsafe_allow_html=True
                         )
                 else:
-                    st.write("None: No features contributed toward benign.")
+                    st.info("ℹ️ No features significantly lowered risk.")
 
-            with x_col2:
+            # Plain-English Decision Verdict
+            final_risk = explanation['model_score'] * 100
+            if final_risk >= 50:
+                verdict_color = "#E03131"
+                verdict_icon = "⚠️"
+                verdict_text = f"The model concluded <b>Malignant ({final_risk:.1f}% risk)</b> because the cellular abnormalities (especially cell enlargement and border indentations) heavily outweighed normal indicators."
+            else:
+                verdict_color = "#2F9E44"
+                verdict_icon = "✅"
+                verdict_text = f"The model concluded <b>Benign ({100 - final_risk:.1f}% confidence)</b> because the cell size and morphology remained well within normal non-cancerous thresholds."
+
+            st.markdown(f"""
+            <div style="background:#F8F9FA; border-left:4px solid {verdict_color}; padding:14px 18px; border-radius:8px; margin-top:14px; font-size:0.95rem; color:#212529;">
+                <b>{verdict_icon} Plain-English Summary:</b> {verdict_text}
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Optional Technical Graphs (Collapsed by default so they don't overwhelm)
+            st.write("")
+            with st.expander("🔬 View Detailed Technical SHAP Graphs (Waterfall & Beeswarm Plots)", expanded=False):
+                st.markdown("###### Local SHAP Waterfall Attribution Plot:")
                 fig_waterfall = plot_local_waterfall(
                     explanation["shap_explanation"],
                     max_display=9,
@@ -276,28 +317,27 @@ def render_results_page():
                 st.pyplot(fig_waterfall)
                 plt.close(fig_waterfall)
 
+                st.markdown("###### Global Biomarker Importance Across Wisconsin Dataset:")
+                g_col1, g_col2 = st.columns(2)
+                with g_col1:
+                    biomarker_img = os.path.join(assets_dir, "shap_feature_importance.png")
+                    if os.path.exists(biomarker_img):
+                        st.image(biomarker_img, caption="Comparative Clinical Biomarker Importance Across 4 Classifiers", use_container_width=True)
+                with g_col2:
+                    rf_summary_img = os.path.join(assets_dir, "shap_summary_random_forest.png")
+                    if os.path.exists(rf_summary_img):
+                        st.image(rf_summary_img, caption="TreeSHAP Beeswarm Summary Plot", use_container_width=True)
+
+                st.markdown("""
+                <div class="medical-disclaimer" style="margin-top:12px;">
+                    <b>⚠️ Methodological Interpretability Boundary:</b><br>
+                    SHAP values reflect mathematical feature attribution and predictive reliance within this statistical learning pipeline. 
+                    <b>They do NOT denote biological causation or physical disease etiology.</b>
+                </div>
+                """, unsafe_allow_html=True)
+
         except Exception as e:
-            st.error(f"Error computing local SHAP explanation: {e}")
-
-    # Global Biomarker Reliance
-    st.markdown("##### Global Biomarker Reliance Across the Wisconsin Cohort:")
-    g_col1, g_col2 = st.columns(2)
-    with g_col1:
-        biomarker_img = os.path.join(assets_dir, "shap_feature_importance.png")
-        if os.path.exists(biomarker_img):
-            st.image(biomarker_img, caption="Comparative Clinical Biomarker Importance Across 4 Classifiers", use_container_width=True)
-    with g_col2:
-        rf_summary_img = os.path.join(assets_dir, "shap_summary_random_forest.png")
-        if os.path.exists(rf_summary_img):
-            st.image(rf_summary_img, caption="TreeSHAP Beeswarm Summary Plot (Random Forest Malignant Attribution)", use_container_width=True)
-
-    st.markdown("""
-    <div class="medical-disclaimer">
-        <b>⚠️ Methodological Interpretability Boundary:</b><br>
-        SHAP values reflect mathematical feature attribution and predictive reliance within this statistical learning pipeline. 
-        <b>They do NOT denote biological causation or physical disease etiology.</b> A high attribution indicates the model relied heavily on that nuclear geometric property to reach its classification score.
-    </div>
-    """, unsafe_allow_html=True)
+            st.error(f"Error computing local explanation: {e}")
 
     st.write("---")
 
