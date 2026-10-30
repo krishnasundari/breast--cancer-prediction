@@ -117,7 +117,10 @@ def render_patient_page():
         </div>
         """, unsafe_allow_html=True)
 
-        col_upload, col_demo = st.columns([1.3, 0.7], gap="medium")
+        col_upload, col_demo = st.columns([1.25, 0.75], gap="medium")
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        samples_dir = os.path.join(base_dir, "data", "sample_reports")
 
         with col_upload:
             uploaded_pdf = st.file_uploader(
@@ -129,8 +132,6 @@ def render_patient_page():
 
         with col_demo:
             st.markdown("<div style='font-size:0.88rem; font-weight:700; color:#0D1B2A; margin-bottom:6px;'>Quick Demo PDF Samples:</div>", unsafe_allow_html=True)
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            samples_dir = os.path.join(base_dir, "data", "sample_reports")
 
             col_d1, col_d2 = st.columns(2)
             with col_d1:
@@ -140,6 +141,7 @@ def render_patient_page():
                         with open(sample_path, "rb") as f:
                             st.session_state["_active_demo_pdf_bytes"] = f.read()
                             st.session_state["_active_demo_pdf_name"] = "fna_biopsy_sample_malignant.pdf"
+                        st.rerun()
             with col_d2:
                 if st.button("🧪 Sample Benign PDF", use_container_width=True):
                     sample_path = os.path.join(samples_dir, "fna_biopsy_sample_benign.pdf")
@@ -147,6 +149,7 @@ def render_patient_page():
                         with open(sample_path, "rb") as f:
                             st.session_state["_active_demo_pdf_bytes"] = f.read()
                             st.session_state["_active_demo_pdf_name"] = "fna_biopsy_sample_benign.pdf"
+                        st.rerun()
 
             if st.button("⚠️ Test Incompatible Blood Test PDF", use_container_width=True):
                 sample_path = os.path.join(samples_dir, "unrelated_blood_test.pdf")
@@ -154,16 +157,33 @@ def render_patient_page():
                     with open(sample_path, "rb") as f:
                         st.session_state["_active_demo_pdf_bytes"] = f.read()
                         st.session_state["_active_demo_pdf_name"] = "unrelated_blood_test.pdf"
+                    st.rerun()
 
-        # Determine active PDF source (uploaded file or selected demo sample)
+        # Handle active PDF source
         pdf_to_process = None
         pdf_display_name = ""
+
+        # If user uploads a file, prioritize the uploaded file and clear any lingering demo
         if uploaded_pdf is not None:
+            st.session_state.pop("_active_demo_pdf_bytes", None)
+            st.session_state.pop("_active_demo_pdf_name", None)
             pdf_to_process = uploaded_pdf
             pdf_display_name = uploaded_pdf.name
         elif st.session_state.get("_active_demo_pdf_bytes"):
             pdf_to_process = st.session_state["_active_demo_pdf_bytes"]
             pdf_display_name = st.session_state.get("_active_demo_pdf_name", "Demo Sample PDF")
+
+            # Show active demo badge with one-click clear button
+            demo_c1, demo_c2 = st.columns([3, 1])
+            with demo_c1:
+                st.info(f"🧪 **Active Demo Sample:** `{pdf_display_name}` *(Auto-loaded via Quick Demo button)*")
+            with demo_c2:
+                if st.button("🗑️ Clear Demo PDF", use_container_width=True):
+                    st.session_state.pop("_active_demo_pdf_bytes", None)
+                    st.session_state.pop("_active_demo_pdf_name", None)
+                    st.rerun()
+        else:
+            st.info("👆 **Awaiting Biopsy Report:** Click the `Upload` button above to select your PDF (or click a Quick Demo sample on the right).")
 
         # Parse PDF if available
         if pdf_to_process is not None:
