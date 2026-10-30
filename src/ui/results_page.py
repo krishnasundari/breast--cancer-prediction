@@ -173,7 +173,17 @@ def render_results_page():
     # SECTION C: Explain Why the Model Predicted This Result (SHAP)
     # =========================================================================
     st.markdown('<div class="section-title">🧠 Section C: Explain Why the Model Predicted This Result (SHAP)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-caption">Shapley Additive exPlanations (SHAP) allocate mathematical contribution values to each morphological feature:</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-caption">Shapley Additive exPlanations (SHAP) break down the prediction into simple factors pushing toward Malignant or Benign:</div>', unsafe_allow_html=True)
+
+    # Friendly Layman / Interview Explainer Card
+    with st.expander("💡 Plain-English Guide: How to Explain this in Interviews & to Doctors", expanded=True):
+        st.markdown("""
+        **Think of SHAP as a Tug-of-War game:**
+        * 🎯 **Baseline Rate ($E[f(X)] = 37.3\%$):** The neutral starting point — the average rate of breast malignancy in the historical dataset.
+        * 🔴 **Red Bars (+ Risk):** Cellular abnormalities (e.g. abnormally large nuclei or irregular notched edges) that **push the risk UP towards Malignant**.
+        * 🔵 **Blue Bars (− Risk):** Normal healthy characteristics (e.g. smooth cell texture) that **pull the risk DOWN towards Benign**.
+        * 🏁 **Final Score ($f(x) = 95.0\%$):** Baseline + (All Red Pulls) − (All Blue Pulls) = Patient's Final Risk Score.
+        """)
 
     # Explainer Selector
     selected_xai_model = st.selectbox(
@@ -182,6 +192,24 @@ def render_results_page():
         format_func=lambda x: model_display_names[x],
         index=3  # Default to Random Forest
     )
+
+    # Friendly human-readable feature labels dictionary
+    FEATURE_HUMAN_NAMES = {
+        "area_worst": "Largest Nuclear Size (Area Worst)",
+        "concave points_worst": "Severe Edge Indentations (Concave Points Worst)",
+        "radius_worst": "Largest Nuclear Radius",
+        "perimeter_worst": "Outer Boundary Length (Perimeter Worst)",
+        "concave points_mean": "Average Border Indentations",
+        "concavity_worst": "Severity of Cell Border Hollows",
+        "texture_mean": "Cell Surface Texture (Chromatin Smoothness)",
+        "texture_worst": "Worst Texture Roughness",
+        "area_mean": "Average Nuclear Area",
+        "perimeter_mean": "Average Cell Perimeter",
+        "radius_mean": "Average Nuclear Radius",
+        "smoothness_worst": "Nuclear Smoothness Variation",
+        "compactness_worst": "Cell Compactness / Density",
+        "symmetry_worst": "Nuclear Asymmetry"
+    }
 
     # Differentiate units clearly using clean styled markdown banners
     if selected_xai_model == "logistic_regression":
@@ -211,11 +239,13 @@ def render_results_page():
                 st.write(f"**Target Score:** `{explanation['model_score']:.4f}` ({explanation['unit_label']})")
                 st.write(f"**Baseline Cohort Rate ($E[f(X)]$):** `{explanation['base_value']:.4f}`")
 
-                st.write("**Top Features Pushing Towards Malignant (Elevating Risk):**")
+                st.write("**Top Red Flags (Pushing Risk Towards Malignant):**")
                 if explanation["top_positive_features"]:
                     for item in explanation["top_positive_features"]:
+                        f_raw = item["feature"]
+                        f_label = FEATURE_HUMAN_NAMES.get(f_raw, f_raw.replace("_", " ").title())
                         st.markdown(
-                            f'<div class="shap-factor-pos"><b>{item["feature"].replace("_", " ").title()}:</b> '
+                            f'<div class="shap-factor-pos"><b>{f_label}:</b> '
                             f'Measured = <code>{item["feature_value"]:.4f}</code> &nbsp;|&nbsp; '
                             f'<b>+{item["shap_value"]:.4f}</b> contribution</div>',
                             unsafe_allow_html=True
@@ -223,11 +253,13 @@ def render_results_page():
                 else:
                     st.write("None: No features contributed positively toward malignancy.")
 
-                st.write("**Top Features Pushing Towards Benign (Lowering Risk):**")
+                st.write("**Top Healthy Indicators (Pulling Risk Towards Benign):**")
                 if explanation["top_negative_features"]:
                     for item in explanation["top_negative_features"]:
+                        f_raw = item["feature"]
+                        f_label = FEATURE_HUMAN_NAMES.get(f_raw, f_raw.replace("_", " ").title())
                         st.markdown(
-                            f'<div class="shap-factor-neg"><b>{item["feature"].replace("_", " ").title()}:</b> '
+                            f'<div class="shap-factor-neg"><b>{f_label}:</b> '
                             f'Measured = <code>{item["feature_value"]:.4f}</code> &nbsp;|&nbsp; '
                             f'<b>{item["shap_value"]:.4f}</b> contribution</div>',
                             unsafe_allow_html=True
