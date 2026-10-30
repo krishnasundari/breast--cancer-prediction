@@ -46,6 +46,27 @@ SAMPLE_PRESETS = {
 }
 
 
+def sync_patient_features_to_inputs(features_dict: Dict[str, float], metadata_dict: Any = None):
+    """Synchronizes feature dictionary into session_state and input widget keys."""
+    if "patient_features" not in st.session_state or st.session_state["patient_features"] is None:
+        st.session_state["patient_features"] = {}
+    for feat, val in features_dict.items():
+        st.session_state["patient_features"][feat] = float(val)
+        st.session_state[f"input_{feat}"] = float(val)
+    if metadata_dict and isinstance(metadata_dict, dict):
+        if "patient_meta" not in st.session_state:
+            st.session_state["patient_meta"] = {}
+        if "patient_id" in metadata_dict:
+            st.session_state["patient_meta"]["patient_id"] = metadata_dict["patient_id"]
+            st.session_state["input_patient_id"] = metadata_dict["patient_id"]
+        if "history" in metadata_dict:
+            st.session_state["patient_meta"]["history"] = metadata_dict["history"]
+            st.session_state["input_patient_history"] = metadata_dict["history"]
+        if "age" in metadata_dict:
+            st.session_state["patient_meta"]["age"] = int(metadata_dict["age"])
+            st.session_state["input_patient_age"] = int(metadata_dict["age"])
+
+
 def render_patient_page():
     st.markdown('<div class="hero-title">📋 Patient Case & Biopsy Intake</div>', unsafe_allow_html=True)
     st.markdown('<div class="hero-subtitle">Step 1 of 2: Ingest Cytological Data & Clinical Context</div>', unsafe_allow_html=True)
@@ -60,6 +81,17 @@ def render_patient_page():
     if "input_method_selection" not in st.session_state:
         st.session_state["input_method_selection"] = "OPTION A: Upload Biopsy Report (PDF)"
 
+    # Ensure widget keys are populated initially
+    for feat, val in st.session_state["patient_features"].items():
+        if f"input_{feat}" not in st.session_state:
+            st.session_state[f"input_{feat}"] = float(val)
+    if "input_patient_id" not in st.session_state:
+        st.session_state["input_patient_id"] = st.session_state["patient_meta"].get("patient_id", "PT-842302")
+    if "input_patient_age" not in st.session_state:
+        st.session_state["input_patient_age"] = int(st.session_state["patient_meta"].get("age", 48))
+    if "input_patient_history" not in st.session_state:
+        st.session_state["input_patient_history"] = st.session_state["patient_meta"].get("history", "Palpable discrete breast nodule")
+
     # =========================================================================
     # SECTION A: Basic Patient Information (Non-identifying tracking)
     # =========================================================================
@@ -68,11 +100,11 @@ def render_patient_page():
 
     c_id, c_age, c_hist = st.columns([1, 1, 2])
     with c_id:
-        p_id = st.text_input("Patient Reference ID (Optional)", value=st.session_state["patient_meta"].get("patient_id", "PT-842302"))
+        p_id = st.text_input("Patient Reference ID (Optional)", key="input_patient_id")
     with c_age:
-        p_age = st.number_input("Patient Age", min_value=18, max_value=110, value=int(st.session_state["patient_meta"].get("age", 48)))
+        p_age = st.number_input("Patient Age", min_value=18, max_value=110, key="input_patient_age")
     with c_hist:
-        p_hist = st.text_input("Relevant Medical History (Optional)", value=st.session_state["patient_meta"].get("history", "Palpable discrete breast nodule"))
+        p_hist = st.text_input("Relevant Medical History (Optional)", key="input_patient_history")
 
     st.session_state["patient_meta"] = {"patient_id": p_id, "age": p_age, "history": p_hist}
 
@@ -150,8 +182,32 @@ def render_patient_page():
 
         # Process ONLY when a user has actually uploaded a PDF file
         if uploaded_pdf is not None:
-            with st.spinner(f"Extracting 30 cytological features from '{uploaded_pdf.name}'..."):
-                parse_res = parse_fna_pdf_report(uploaded_pdf)
+            pdf_bytes = uploaded_pdf.getvalue()
+            pdf_sig = f"{uploaded_pdf.name}_{len(pdf_bytes)}"
+
+            # Trigger parse and session sync if this is a newly uploaded PDF
+            if st.session_state.get("_last_parsed_pdf_sig") != pdf_sig:
+                with st.spinner(f"Extracting 30 cytological features from '{uploaded_pdf.name}'..."):
+                    parse_res = parse_fna_pdf_report(pdf_bytes)
+                st.session_state["_last_parsed_pdf_sig"] = pdf_sig
+                st.session_state["_cached_parse_res"] = parse_res
+
+                if parse_res["success"]:
+                    meta = parse_res.get("metadata", {})
+                    # Smart defaults based on filename or patient reference
+                    if "8510426" in meta.get("patient_id", "") or "benign" in uploaded_pdf.name.lower():
+                        meta.setdefault("patient_id", "PT-8510426")
+                        meta.setdefault("history", "Routine screening / benign fibroadenoma")
+                        meta.setdefault("age", 36)
+                    elif "842302" in meta.get("patient_id", "") or "malignant" in uploaded_pdf.name.lower():
+                        meta.setdefault("patient_id", "PT-842302")
+                        meta.setdefault("history", "Palpable discrete breast nodule")
+                        meta.setdefault("age", 48)
+
+                    sync_patient_features_to_inputs(parse_res["extracted_features"], meta)
+                    st.rerun()
+            else:
+                parse_res = st.session_state.get("_cached_parse_res", parse_fna_pdf_report(pdf_bytes))
 
             if parse_res["success"]:
                 found_count = parse_res["features_found_count"]
@@ -166,10 +222,6 @@ def render_patient_page():
                         f"Missing {len(missing)} measurements: {', '.join(missing[:4])}... "
                         "Please inspect and complete the missing values in the review form below."
                     )
-
-                # Populate session state features with extracted values
-                for k, v in extracted.items():
-                    st.session_state["patient_features"][k] = v
 
                 # Display Extracted Measurements Review Table
                 with st.expander("📊 View Extracted Values & Status Table", expanded=True):
@@ -189,6 +241,8 @@ def render_patient_page():
                 st.error(f"❌ PDF Incompatible: {parse_res.get('error')}")
                 st.info("💡 You may switch to 'OPTION B: Enter Measurements Manually' to supply the 30 continuous features directly.")
         else:
+            st.session_state.pop("_last_parsed_pdf_sig", None)
+            st.session_state.pop("_cached_parse_res", None)
             st.info("👆 **Awaiting Biopsy Report:** Click the `Upload` button above to select your PDF report from your computer.")
 
     # -------------------------------------------------------------------------
@@ -207,17 +261,26 @@ def render_patient_page():
         preset_c1, preset_c2, preset_c3 = st.columns([1, 1, 1.5])
         with preset_c1:
             if st.button("📥 Load Malignant Preset", use_container_width=True):
-                st.session_state["patient_features"] = SAMPLE_PRESETS["Malignant Preset (Wisconsin Case #842302)"].copy()
+                sync_patient_features_to_inputs(
+                    SAMPLE_PRESETS["Malignant Preset (Wisconsin Case #842302)"],
+                    {"patient_id": "PT-842302", "age": 48, "history": "Palpable discrete breast nodule"}
+                )
                 st.success("Loaded confirmed Malignant preset (30 features).")
                 st.rerun()
         with preset_c2:
             if st.button("📥 Load Benign Preset", use_container_width=True):
-                st.session_state["patient_features"] = SAMPLE_PRESETS["Benign Preset (Wisconsin Case #8510426)"].copy()
+                sync_patient_features_to_inputs(
+                    SAMPLE_PRESETS["Benign Preset (Wisconsin Case #8510426)"],
+                    {"patient_id": "PT-8510426", "age": 36, "history": "Routine screening / benign fibroadenoma"}
+                )
                 st.success("Loaded confirmed Benign preset (30 features).")
                 st.rerun()
         with preset_c3:
             if st.button("🔄 Reset Measurements to Default", use_container_width=True):
-                st.session_state["patient_features"] = SAMPLE_PRESETS["Malignant Preset (Wisconsin Case #842302)"].copy()
+                sync_patient_features_to_inputs(
+                    SAMPLE_PRESETS["Malignant Preset (Wisconsin Case #842302)"],
+                    {"patient_id": "PT-842302", "age": 48, "history": "Palpable discrete breast nodule"}
+                )
                 st.info("Reset features to default baseline.")
                 st.rerun()
 

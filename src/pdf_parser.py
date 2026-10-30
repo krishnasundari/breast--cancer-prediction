@@ -83,6 +83,11 @@ FEATURE_ALIAS_PATTERNS = {
 def extract_text_from_pdf(pdf_file_or_bytes: Any) -> str:
     """Extract raw text from a PDF file-like object or bytes."""
     try:
+        if hasattr(pdf_file_or_bytes, "seek"):
+            try:
+                pdf_file_or_bytes.seek(0)
+            except Exception:
+                pass
         if isinstance(pdf_file_or_bytes, bytes):
             stream = io.BytesIO(pdf_file_or_bytes)
         elif hasattr(pdf_file_or_bytes, "read"):
@@ -106,6 +111,15 @@ def parse_morphology_from_text(raw_text: str) -> Dict[str, Any]:
     Scans document text for key nuclear morphology features using multi-line and single-line regex.
     """
     extracted: Dict[str, float] = {}
+
+    # Metadata extraction (Patient ID, Indication)
+    metadata: Dict[str, str] = {}
+    id_match = re.search(r"Patient Reference ID:\s*([A-Za-z0-9\-]+)", raw_text, re.IGNORECASE)
+    if id_match:
+        metadata["patient_id"] = id_match.group(1).strip()
+    ind_match = re.search(r"Clinical Indication:\s*([^\n\r]+)", raw_text, re.IGNORECASE)
+    if ind_match:
+        metadata["history"] = ind_match.group(1).strip()
 
     # Method 1: Check consecutive lines where line i is feature name and line i+1 is number
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
@@ -179,6 +193,7 @@ def parse_morphology_from_text(raw_text: str) -> Dict[str, Any]:
         "features_found_count": len(extracted),
         "total_required": len(FEATURE_NAMES),
         "is_complete": is_complete,
+        "metadata": metadata,
         "unrelated_indicators": unrelated_indicators,
         "is_unrelated_report": len(unrelated_indicators) > 0 and len(extracted) < 5
     }
@@ -195,7 +210,8 @@ def parse_fna_pdf_report(pdf_file_or_bytes: Any) -> Dict[str, Any]:
             "error": "The uploaded PDF appears empty or contains scanned images without selectable text.",
             "extracted_features": {},
             "missing_features": FEATURE_NAMES,
-            "is_complete": False
+            "is_complete": False,
+            "metadata": {}
         }
 
     parsed = parse_morphology_from_text(raw_text)
@@ -211,6 +227,7 @@ def parse_fna_pdf_report(pdf_file_or_bytes: Any) -> Dict[str, Any]:
             "extracted_features": parsed["extracted_features"],
             "missing_features": parsed["missing_features"],
             "is_complete": False,
+            "metadata": parsed.get("metadata", {}),
             "raw_text_snippet": raw_text[:300]
         }
 
@@ -220,5 +237,6 @@ def parse_fna_pdf_report(pdf_file_or_bytes: Any) -> Dict[str, Any]:
         "missing_features": parsed["missing_features"],
         "features_found_count": parsed["features_found_count"],
         "is_complete": parsed["is_complete"],
+        "metadata": parsed.get("metadata", {}),
         "raw_text_snippet": raw_text[:300]
     }
