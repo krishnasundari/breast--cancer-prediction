@@ -117,6 +117,10 @@ def render_patient_page():
         </div>
         """, unsafe_allow_html=True)
 
+        # Clear any old demo state
+        st.session_state.pop("_active_demo_pdf_bytes", None)
+        st.session_state.pop("_active_demo_pdf_name", None)
+
         col_upload, col_demo = st.columns([1.25, 0.75], gap="medium")
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -131,64 +135,23 @@ def render_patient_page():
             )
 
         with col_demo:
-            st.markdown("<div style='font-size:0.88rem; font-weight:700; color:#0D1B2A; margin-bottom:6px;'>Quick Demo PDF Samples:</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-size:0.88rem; font-weight:700; color:#0D1B2A; margin-bottom:6px;'>Download Sample Test PDFs:</div>", unsafe_allow_html=True)
+            st.caption("Don't have a report? Download a sample, then upload it on the left:")
 
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
-                if st.button("🧪 Sample Malignant PDF", use_container_width=True):
-                    sample_path = os.path.join(samples_dir, "fna_biopsy_sample_malignant.pdf")
-                    if os.path.exists(sample_path):
-                        with open(sample_path, "rb") as f:
-                            st.session_state["_active_demo_pdf_bytes"] = f.read()
-                            st.session_state["_active_demo_pdf_name"] = "fna_biopsy_sample_malignant.pdf"
-                        st.rerun()
-            with col_d2:
-                if st.button("🧪 Sample Benign PDF", use_container_width=True):
-                    sample_path = os.path.join(samples_dir, "fna_biopsy_sample_benign.pdf")
-                    if os.path.exists(sample_path):
-                        with open(sample_path, "rb") as f:
-                            st.session_state["_active_demo_pdf_bytes"] = f.read()
-                            st.session_state["_active_demo_pdf_name"] = "fna_biopsy_sample_benign.pdf"
-                        st.rerun()
+            p_mal = os.path.join(samples_dir, "fna_biopsy_sample_malignant.pdf")
+            if os.path.exists(p_mal):
+                with open(p_mal, "rb") as f:
+                    st.download_button("📥 Malignant Sample PDF", data=f.read(), file_name="fna_biopsy_sample_malignant.pdf", mime="application/pdf", use_container_width=True)
 
-            if st.button("⚠️ Test Incompatible Blood Test PDF", use_container_width=True):
-                sample_path = os.path.join(samples_dir, "unrelated_blood_test.pdf")
-                if os.path.exists(sample_path):
-                    with open(sample_path, "rb") as f:
-                        st.session_state["_active_demo_pdf_bytes"] = f.read()
-                        st.session_state["_active_demo_pdf_name"] = "unrelated_blood_test.pdf"
-                    st.rerun()
+            p_ben = os.path.join(samples_dir, "fna_biopsy_sample_benign.pdf")
+            if os.path.exists(p_ben):
+                with open(p_ben, "rb") as f:
+                    st.download_button("📥 Benign Sample PDF", data=f.read(), file_name="fna_biopsy_sample_benign.pdf", mime="application/pdf", use_container_width=True)
 
-        # Handle active PDF source
-        pdf_to_process = None
-        pdf_display_name = ""
-
-        # If user uploads a file, prioritize the uploaded file and clear any lingering demo
+        # Process ONLY when a user has actually uploaded a PDF file
         if uploaded_pdf is not None:
-            st.session_state.pop("_active_demo_pdf_bytes", None)
-            st.session_state.pop("_active_demo_pdf_name", None)
-            pdf_to_process = uploaded_pdf
-            pdf_display_name = uploaded_pdf.name
-        elif st.session_state.get("_active_demo_pdf_bytes"):
-            pdf_to_process = st.session_state["_active_demo_pdf_bytes"]
-            pdf_display_name = st.session_state.get("_active_demo_pdf_name", "Demo Sample PDF")
-
-            # Show active demo badge with one-click clear button
-            demo_c1, demo_c2 = st.columns([3, 1])
-            with demo_c1:
-                st.info(f"🧪 **Active Demo Sample:** `{pdf_display_name}` *(Auto-loaded via Quick Demo button)*")
-            with demo_c2:
-                if st.button("🗑️ Clear Demo PDF", use_container_width=True):
-                    st.session_state.pop("_active_demo_pdf_bytes", None)
-                    st.session_state.pop("_active_demo_pdf_name", None)
-                    st.rerun()
-        else:
-            st.info("👆 **Awaiting Biopsy Report:** Click the `Upload` button above to select your PDF (or click a Quick Demo sample on the right).")
-
-        # Parse PDF if available
-        if pdf_to_process is not None:
-            with st.spinner(f"Extracting 30 cytological features from '{pdf_display_name}'..."):
-                parse_res = parse_fna_pdf_report(pdf_to_process)
+            with st.spinner(f"Extracting 30 cytological features from '{uploaded_pdf.name}'..."):
+                parse_res = parse_fna_pdf_report(uploaded_pdf)
 
             if parse_res["success"]:
                 found_count = parse_res["features_found_count"]
@@ -196,7 +159,7 @@ def render_patient_page():
                 missing = parse_res["missing_features"]
 
                 if parse_res["is_complete"]:
-                    st.success(f"✅ Full Feature Extraction Succeeded: Successfully detected all {found_count} of 30 required Wisconsin nuclear features from '{pdf_display_name}'.")
+                    st.success(f"✅ Full Feature Extraction Succeeded: Detected all {found_count} of 30 required Wisconsin nuclear features from '{uploaded_pdf.name}'.")
                 else:
                     st.warning(
                         f"⚠️ Incomplete PDF Extraction: Found {found_count} of 30 features. "
@@ -225,6 +188,8 @@ def render_patient_page():
             else:
                 st.error(f"❌ PDF Incompatible: {parse_res.get('error')}")
                 st.info("💡 You may switch to 'OPTION B: Enter Measurements Manually' to supply the 30 continuous features directly.")
+        else:
+            st.info("👆 **Awaiting Biopsy Report:** Click the `Upload` button above to select your PDF report from your computer.")
 
     # -------------------------------------------------------------------------
     # OPTION B: ENTER MEASUREMENTS MANUALLY
