@@ -47,24 +47,22 @@ SAMPLE_PRESETS = {
 
 
 def sync_patient_features_to_inputs(features_dict: Dict[str, float], metadata_dict: Any = None):
-    """Synchronizes feature dictionary into session_state and input widget keys."""
+    """Synchronizes feature dictionary and metadata into session_state using versioned keys."""
     if "patient_features" not in st.session_state or st.session_state["patient_features"] is None:
         st.session_state["patient_features"] = {}
     for feat, val in features_dict.items():
         st.session_state["patient_features"][feat] = float(val)
-        st.session_state[f"input_{feat}"] = float(val)
     if metadata_dict and isinstance(metadata_dict, dict):
         if "patient_meta" not in st.session_state:
             st.session_state["patient_meta"] = {}
         if "patient_id" in metadata_dict:
             st.session_state["patient_meta"]["patient_id"] = metadata_dict["patient_id"]
-            st.session_state["input_patient_id"] = metadata_dict["patient_id"]
         if "history" in metadata_dict:
             st.session_state["patient_meta"]["history"] = metadata_dict["history"]
-            st.session_state["input_patient_history"] = metadata_dict["history"]
         if "age" in metadata_dict:
             st.session_state["patient_meta"]["age"] = int(metadata_dict["age"])
-            st.session_state["input_patient_age"] = int(metadata_dict["age"])
+    
+    st.session_state["patient_version"] = st.session_state.get("patient_version", 0) + 1
 
 
 def render_patient_page():
@@ -80,17 +78,10 @@ def render_patient_page():
         st.session_state["patient_symptoms"] = {}
     if "input_method_selection" not in st.session_state:
         st.session_state["input_method_selection"] = "OPTION A: Upload Biopsy Report (PDF)"
+    if "patient_version" not in st.session_state:
+        st.session_state["patient_version"] = 0
 
-    # Ensure widget keys are populated initially
-    for feat, val in st.session_state["patient_features"].items():
-        if f"input_{feat}" not in st.session_state:
-            st.session_state[f"input_{feat}"] = float(val)
-    if "input_patient_id" not in st.session_state:
-        st.session_state["input_patient_id"] = st.session_state["patient_meta"].get("patient_id", "PT-842302")
-    if "input_patient_age" not in st.session_state:
-        st.session_state["input_patient_age"] = int(st.session_state["patient_meta"].get("age", 48))
-    if "input_patient_history" not in st.session_state:
-        st.session_state["input_patient_history"] = st.session_state["patient_meta"].get("history", "Palpable discrete breast nodule")
+    v = st.session_state["patient_version"]
 
     # =========================================================================
     # SECTION A: Basic Patient Information (Non-identifying tracking)
@@ -100,11 +91,11 @@ def render_patient_page():
 
     c_id, c_age, c_hist = st.columns([1, 1, 2])
     with c_id:
-        p_id = st.text_input("Patient Reference ID (Optional)", key="input_patient_id")
+        p_id = st.text_input("Patient Reference ID (Optional)", value=st.session_state["patient_meta"].get("patient_id", "PT-842302"), key=f"p_id_{v}")
     with c_age:
-        p_age = st.number_input("Patient Age", min_value=18, max_value=110, key="input_patient_age")
+        p_age = st.number_input("Patient Age", min_value=18, max_value=110, value=int(st.session_state["patient_meta"].get("age", 48)), key=f"p_age_{v}")
     with c_hist:
-        p_hist = st.text_input("Relevant Medical History (Optional)", key="input_patient_history")
+        p_hist = st.text_input("Relevant Medical History (Optional)", value=st.session_state["patient_meta"].get("history", "Palpable discrete breast nodule"), key=f"p_hist_{v}")
 
     st.session_state["patient_meta"] = {"patient_id": p_id, "age": p_age, "history": p_hist}
 
@@ -314,7 +305,7 @@ def render_patient_page():
                     f"{label} (Mean)",
                     value=cur_val,
                     format="%.4f",
-                    key=f"input_{feat}"
+                    key=f"input_{feat}_{v}"
                 )
                 cur_feats[feat] = val
 
@@ -332,7 +323,7 @@ def render_patient_page():
                     f"{label} (SE)",
                     value=cur_val,
                     format="%.4f",
-                    key=f"input_{feat}"
+                    key=f"input_{feat}_{v}"
                 )
                 cur_feats[feat] = val
 
@@ -350,7 +341,7 @@ def render_patient_page():
                     f"{label} (Worst)",
                     value=cur_val,
                     format="%.4f",
-                    key=f"input_{feat}"
+                    key=f"input_{feat}_{v}"
                 )
                 cur_feats[feat] = val
 
