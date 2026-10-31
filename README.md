@@ -13,9 +13,20 @@ An end-to-end machine learning system that analyzes cell nuclear morphology from
 
 ## 1. Project Overview
 
-Breast cancer is one of the most diagnosed cancers among women globally. Early and accurate detection helps physicians determine whether a tumor is non-cancerous (benign) or cancerous (malignant), allowing timely clinical intervention.
+My project is a **Breast Cancer Detection and Classification System** that uses Machine Learning to classify breast tumors as either Benign (non-cancerous) or Malignant (cancerous).
 
-This project uses supervised machine learning to classify tumors using 30 quantitative geometric measurements computed from digitized images of Fine Needle Aspirate (FNA) breast biopsies. The system trains and compares four distinct algorithms, extracts measurements directly from PDF reports or manual inputs, and explains each prediction using SHAP (SHapley Additive exPlanations).
+The project uses the Wisconsin Breast Cancer Diagnostic Dataset, which contains 569 samples and 30 numerical features describing the characteristics of cell nuclei.
+
+I implemented and compared four Machine Learning algorithms:
+
+* K-Nearest Neighbors (KNN)
+* Logistic Regression
+* Support Vector Machine (SVM)
+* Random Forest
+
+The application allows users to enter the 30 feature values manually or upload a supported PDF report. It then predicts the tumor category using the trained models.
+
+I also integrated **SHAP (Explainable AI)** to explain which features influenced each model's prediction. The application is built using Python and Streamlit.
 
 ---
 
